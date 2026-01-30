@@ -57,6 +57,8 @@ agent.log
 data/*.csv
 data/*.json
 *.csv
+!src/data/rss_feeds.csv
+!src/data/keywords.csv
 !sql/*.sql
 
 # Jupyter Notebooks checkpoints
