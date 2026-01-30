@@ -51,10 +51,35 @@ def print_banner():
     print("=" * 70 + "\n")
 
 
+_progress_start_time = None
+_progress_times = []
+
 def progress_callback(current: int, total: int, article: Dict[str, Any]):
-    """Progress callback for batch processing."""
-    title = article.get('headline', article.get('news_title', 'Unknown'))[:50]
-    logger.info(f"[{current}/{total}] Processing: {title}...")
+    """Progress callback for batch processing with timing estimates."""
+    global _progress_start_time, _progress_times
+    
+    now = datetime.now()
+    
+    # Initialize on first call
+    if current == 1:
+        _progress_start_time = now
+        _progress_times = []
+    
+    title = article.get('headline', article.get('news_title', 'Unknown'))[:40]
+    
+    # Calculate timing
+    if _progress_start_time:
+        elapsed = (now - _progress_start_time).total_seconds()
+        avg_per_article = elapsed / current if current > 0 else 0
+        remaining = (total - current) * avg_per_article
+        
+        # Format times
+        elapsed_str = f"{elapsed:.0f}s"
+        remaining_str = f"{remaining:.0f}s" if remaining < 3600 else f"{remaining/60:.0f}m"
+        
+        logger.info(f"[{current}/{total}] ({elapsed_str} elapsed, ~{remaining_str} remaining) {title}...")
+    else:
+        logger.info(f"[{current}/{total}] Processing: {title}...")
 
 
 def print_event_summary(result: ExtractionResult):
@@ -200,7 +225,16 @@ def main(
     print_final_summary(results, stats)
     
     elapsed = datetime.now() - start_time
-    logger.info(f"\n✅ Pipeline complete. Total time: {elapsed.total_seconds():.1f}s")
+    elapsed_secs = elapsed.total_seconds()
+    processed_count = sum(1 for r in results if not r.is_duplicate)
+    
+    print(f"\n⏱️  Timing:")
+    print(f"   Total time:        {elapsed_secs:.1f}s ({elapsed_secs/60:.1f} minutes)")
+    if processed_count > 0:
+        print(f"   Avg per article:   {elapsed_secs/processed_count:.1f}s")
+        print(f"   Articles/minute:   {processed_count/(elapsed_secs/60):.1f}")
+    
+    logger.info(f"\n✅ Pipeline complete. Total time: {elapsed_secs:.1f}s")
 
 
 def run_test(model: str = "gpt-4o"):
