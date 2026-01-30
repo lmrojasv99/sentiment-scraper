@@ -3,6 +3,7 @@ Centralized configuration settings for the application.
 """
 
 import os
+import csv
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -15,6 +16,37 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 SQL_DIR = PROJECT_ROOT / "sql"
+SRC_DATA_DIR = PROJECT_ROOT / "src" / "data"
+
+
+def _load_rss_feeds_from_csv() -> List[str]:
+    """Load RSS feeds from CSV file."""
+    csv_path = SRC_DATA_DIR / "rss_feeds.csv"
+    feeds = []
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get('url'):
+                    feeds.append(row['url'])
+    except FileNotFoundError:
+        pass  # Will use hardcoded fallback
+    return feeds
+
+
+def _load_keywords_from_csv() -> List[str]:
+    """Load keywords from CSV file."""
+    csv_path = SRC_DATA_DIR / "keywords.csv"
+    keywords = []
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get('keyword'):
+                    keywords.append(row['keyword'].lower())
+    except FileNotFoundError:
+        pass  # Will use hardcoded fallback
+    return keywords
 
 
 @dataclass
@@ -55,31 +87,25 @@ class Settings:
     log_file: str = "agent.log"
     log_level: str = "INFO"
     
-    # RSS Feeds
-    rss_feeds: List[str] = field(default_factory=lambda: [
-        # Reuters
+    # RSS Feeds - loaded from CSV, with hardcoded fallback
+    rss_feeds: List[str] = field(default_factory=lambda: _load_rss_feeds_from_csv() or [
+        # Fallback if CSV not found
         "https://www.rss.app/feeds/tswtMNNRqiPOqVe6.xml",
-        # BBC
         "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml",
         "https://feeds.bbci.co.uk/news/world/rss.xml",
-        # NPR
         "https://feeds.npr.org/1004/rss.xml",
-        # The Guardian
         "https://www.theguardian.com/world/americas/rss",
         "https://www.theguardian.com/us-news/rss",
-        # Al Jazeera
         "https://www.aljazeera.com/xml/rss/all.xml",
-        # Associated Press
         "https://rsshub.app/apnews/topics/world-news",
-        # CBC (Canadian)
         "https://www.cbc.ca/webfeed/rss/rss-world",
         "https://www.cbc.ca/webfeed/rss/rss-politics",
-        # Mexico News Daily
         "https://mexiconewsdaily.com/feed/",
     ])
     
-    # Relevance Keywords
-    relevance_keywords: List[str] = field(default_factory=lambda: [
+    # Relevance Keywords - loaded from CSV, with hardcoded fallback
+    relevance_keywords: List[str] = field(default_factory=lambda: _load_keywords_from_csv() or [
+        # Fallback if CSV not found
         'united states', 'usa', 'u.s.', 'america', 'american', 'washington',
         'canada', 'canadian', 'ottawa', 'trudeau',
         'mexico', 'mexican', 'amlo', 'sheinbaum',
