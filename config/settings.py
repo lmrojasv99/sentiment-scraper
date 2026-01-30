@@ -28,9 +28,16 @@ class Settings:
     openai_max_tokens: int = 4096
     
     # Database Configuration
+    # If DATABASE_URL is set (Render Postgres), use it; otherwise use SQLite
+    database_url: Optional[str] = field(default_factory=lambda: os.getenv("DATABASE_URL"))
     db_name: str = "geopolitical_monitor.db"
     db_path: Path = field(default_factory=lambda: DATA_DIR / "geopolitical_monitor.db")
     schema_path: Path = field(default_factory=lambda: SQL_DIR / "schema.sql")
+    
+    @property
+    def use_postgres(self) -> bool:
+        """Check if using Postgres (via DATABASE_URL)."""
+        return bool(self.database_url)
     
     # Scraper Configuration
     scraper_days_lookback: int = 5

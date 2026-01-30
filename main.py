@@ -12,6 +12,7 @@ Coordinates the full pipeline for:
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -22,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from dotenv import load_dotenv
 from config.settings import get_settings, Settings
-from src.data.database import init_db, get_statistics, set_db_path
+from src.data.database import init_db, get_statistics, set_db_path, set_database_url
 from src.data.scraper import NewsScraper
 from src.core.analyzer import EventAnalyzer
 from src.core.event_extractor import EventExtractor, BatchExtractor, ExtractionResult
@@ -147,9 +148,14 @@ def main(
     logger.info("Starting Global International Relations Monitor v2.0")
     start_time = datetime.now()
     
-    # Initialize Database
+    # Initialize Database (Postgres if DATABASE_URL is set, else SQLite)
     logger.info("📁 Initializing database...")
-    set_db_path(settings.db_path)
+    if settings.database_url:
+        logger.info("Using PostgreSQL database")
+        set_database_url(settings.database_url)
+    else:
+        logger.info("Using SQLite database")
+        set_db_path(settings.db_path)
     init_db(reset=reset_db)
     
     # Initialize Components
@@ -162,11 +168,14 @@ def main(
         delay_between=delay_between
     )
     
+    # Use RSS feed scraper
+    logger.info("📡 Using RSS feed scraper")
     scraper = NewsScraper()
     
-    # Scrape Articles
+    # Scrape Articles from RSS feeds
     logger.info(f"📰 Scraping news articles (last {days} days)...")
     articles = scraper.scrape_articles(days=days)
+    
     logger.info(f"Found {len(articles)} relevant articles")
     
     if not articles:
@@ -202,7 +211,11 @@ def run_test(model: str = "gpt-4o"):
         print("❌ OPENAI_API_KEY not configured!")
         return
     
-    set_db_path(settings.db_path)
+    # Initialize Database (Postgres if DATABASE_URL is set, else SQLite)
+    if settings.database_url:
+        set_database_url(settings.database_url)
+    else:
+        set_db_path(settings.db_path)
     init_db(reset=False)
     
     analyzer = EventAnalyzer(model=model)
@@ -245,13 +258,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Global International Relations Monitor"
     )
-    parser.add_argument("--days", "-d", type=int, default=5)
-    parser.add_argument("--batch-size", "-b", type=int, default=10)
-    parser.add_argument("--delay", "-w", type=float, default=1.5)
+    parser.add_argument("--days", "-d", type=int, default=5,
+                        help="Days to look back for articles")
+    parser.add_argument("--batch-size", "-b", type=int, default=10,
+                        help="Batch size for processing")
+    parser.add_argument("--delay", "-w", type=float, default=1.5,
+                        help="Delay between API calls")
     parser.add_argument("--model", "-m", type=str, default="gpt-4o",
-                        choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"])
-    parser.add_argument("--reset-db", action="store_true")
-    parser.add_argument("--test", action="store_true")
+                        choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+                        help="OpenAI model to use")
+    parser.add_argument("--reset-db", action="store_true",
+                        help="Reset database before running")
+    parser.add_argument("--test", action="store_true",
+                        help="Run with test article")
     
     args = parser.parse_args()
     

@@ -1,4 +1,5 @@
 import os
+import csv
 import time
 import random
 import logging
@@ -18,55 +19,68 @@ class NewsScraper:
     Focuses on North American international relations (US, Canada, Mexico).
     """
     
-    def __init__(self):
+    def __init__(self, feeds_csv=None, keywords_csv=None):
         self.user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         self.config = Config()
         self.config.browser_user_agent = self.user_agent
         self.config.request_timeout = 15
         
-        # RSS feeds from major news sources covering international relations
-        self.rss_feeds = [
-            # Reuters
-            "https://www.rss.app/feeds/tswtMNNRqiPOqVe6.xml",  # Reuters World
-            # BBC
-            "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml",
-            "https://feeds.bbci.co.uk/news/world/rss.xml",
-            # NPR
-            "https://feeds.npr.org/1004/rss.xml",  # NPR World
-            # The Guardian
-            "https://www.theguardian.com/world/americas/rss",
-            "https://www.theguardian.com/us-news/rss",
-            # Al Jazeera
-            "https://www.aljazeera.com/xml/rss/all.xml",
-            # Associated Press
-            "https://rsshub.app/apnews/topics/world-news",
-            # CBC (Canadian)
-            "https://www.cbc.ca/webfeed/rss/rss-world",
-            "https://www.cbc.ca/webfeed/rss/rss-politics",
-            # Mexico News Daily
-            "https://mexiconewsdaily.com/feed/",
-        ]
+        # Get base path for CSV files
+        base_path = os.path.dirname(os.path.abspath(__file__))
         
-        # Keywords to filter relevant articles
-        self.relevance_keywords = [
-            # Countries
-            'united states', 'usa', 'u.s.', 'america', 'american', 'washington',
-            'canada', 'canadian', 'ottawa', 'trudeau',
-            'mexico', 'mexican', 'amlo', 'sheinbaum',
-            # Relations keywords
-            'trade', 'tariff', 'nafta', 'usmca', 'border', 'immigration',
-            'diplomacy', 'treaty', 'agreement', 'relations', 'summit',
-            'sanction', 'embargo', 'cooperation', 'alliance', 'tension',
-            'bilateral', 'trilateral', 'north america'
-        ]
+        # Load RSS feeds from CSV
+        feeds_path = feeds_csv or os.path.join(base_path, 'rss_feeds.csv')
+        self.rss_feeds = self._load_feeds_from_csv(feeds_path)
+        
+        # Load keywords from CSV
+        keywords_path = keywords_csv or os.path.join(base_path, 'keywords.csv')
+        self.relevance_keywords = self._load_keywords_from_csv(keywords_path)
+    
+    def _load_feeds_from_csv(self, csv_path):
+        """Load RSS feed URLs from a CSV file."""
+        feeds = []
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    feeds.append(row['url'])
+            logger.info(f"Loaded {len(feeds)} RSS feeds from {csv_path}")
+        except FileNotFoundError:
+            logger.error(f"RSS feeds CSV not found: {csv_path}")
+        except Exception as e:
+            logger.error(f"Error loading RSS feeds: {e}")
+        return feeds
+    
+    def _load_keywords_from_csv(self, csv_path):
+        """Load relevance keywords from a CSV file."""
+        keywords = []
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    keywords.append(row['keyword'])
+            logger.info(f"Loaded {len(keywords)} keywords from {csv_path}")
+        except FileNotFoundError:
+            logger.error(f"Keywords CSV not found: {csv_path}")
+        except Exception as e:
+            logger.error(f"Error loading keywords: {e}")
+        return keywords
 
     def scrape_articles(self, days=5):
         """
         Scrapes articles from RSS feeds, filtering for North American relevance.
+        Includes timing to track execution duration.
+        
+        Returns:
+            tuple: (articles list, elapsed time in seconds)
         """
+        start_time = time.time()
+        
         cutoff_date = datetime.now() - timedelta(days=days)
         all_articles = []
         seen_urls = set()
+        
+        logger.info(f"Starting scrape for articles from the last {days} day(s)...")
         
         for feed_url in self.rss_feeds:
             logger.info(f"Fetching RSS feed: {feed_url}")
@@ -78,8 +92,14 @@ class NewsScraper:
                 logger.warning(f"Error fetching feed {feed_url}: {e}")
                 continue
         
+        # Calculate and log timing
+        elapsed_time = time.time() - start_time
+        minutes, seconds = divmod(elapsed_time, 60)
+        
         logger.info(f"Found {len(all_articles)} relevant articles from RSS feeds")
-        return all_articles
+        logger.info(f"⏱️  Scraping completed in {int(minutes)}m {seconds:.2f}s for {days} day(s)")
+        
+        return all_articles, elapsed_time
 
     def _parse_feed(self, feed_url, cutoff_date, seen_urls):
         """Parse a single RSS feed and extract relevant articles."""
@@ -218,9 +238,13 @@ class NewsScraper:
 
 if __name__ == "__main__":
     scraper = NewsScraper()
-    articles = scraper.scrape_articles(days=3)
+    articles, elapsed = scraper.scrape_articles(days=3)
+    
     print(f"\n{'='*60}")
     print(f"Scraped {len(articles)} relevant articles")
+    print(f"⏱️  Total time: {elapsed:.2f} seconds")
+    print(f"{'='*60}")
+    
     for i, article in enumerate(articles[:5], 1):
         print(f"\n{i}. {article['headline'][:80]}")
         print(f"   Source: {article['source']}")
