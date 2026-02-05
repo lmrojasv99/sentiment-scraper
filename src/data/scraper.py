@@ -29,7 +29,7 @@ class NewsScraper:
         base_path = os.path.dirname(os.path.abspath(__file__))
         
         # Load RSS feeds from CSV
-        feeds_path = feeds_csv or os.path.join(base_path, 'rss_feeds.csv')
+        feeds_path = feeds_csv or os.path.join(base_path, 'rss_feed_links.csv')
         self.rss_feeds = self._load_feeds_from_csv(feeds_path)
         
         # Load keywords from CSV

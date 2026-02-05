@@ -11,6 +11,7 @@ An automated pipeline for collecting, processing, and analyzing international ne
 ```
 Sentiment_Scraper/
 ├── main.py                    # Entry point & CLI
+├── api.py                     # Flask REST API
 ├── requirements.txt           # Dependencies
 ├── README.md                  # Documentation
 ├── .env                       # API configuration
@@ -199,6 +200,62 @@ print(settings.scraper_days_lookback)  # 5
 ```bash
 # .env file
 OPENAI_API_KEY=sk-your-api-key-here
+```
+
+---
+
+## REST API
+
+The project includes a Flask API for querying the database. It supports both PostgreSQL (production) and SQLite (local development).
+
+### Running the API
+
+```bash
+# Local development (uses SQLite)
+python3 api.py
+
+# Or specify a custom port
+PORT=5001 python3 api.py
+
+# Production (uses PostgreSQL via DATABASE_URL)
+DATABASE_URL=postgres://... python3 api.py
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | API info and available endpoints |
+| `/stats` | GET | Database statistics (counts, averages) |
+| `/articles` | GET | List articles (`?limit=N&offset=N`) |
+| `/articles/<id>` | GET | Get article by ID with its events |
+| `/events` | GET | List events (`?limit=N&offset=N&dimension=X`) |
+| `/events/<id>` | GET | Get event by ID with actors |
+| `/query` | POST | Run custom SQL query (`{"sql": "SELECT ..."}`) |
+| `/full-export` | GET | Export all events with full data (`?limit=N`) |
+
+### Example Requests
+
+```bash
+# Get database statistics
+curl http://127.0.0.1:5000/stats
+
+# Get recent articles
+curl "http://127.0.0.1:5000/articles?limit=10"
+
+# Get events filtered by dimension
+curl "http://127.0.0.1:5000/events?dimension=Economic%20Relations&limit=20"
+
+# Get full article with events
+curl http://127.0.0.1:5000/articles/83
+
+# Export all data to JSON
+curl "http://127.0.0.1:5000/full-export?limit=1000" > data_export.json
+
+# Run custom query
+curl -X POST http://127.0.0.1:5000/query \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT dimension, COUNT(*) FROM events GROUP BY dimension"}'
 ```
 
 ---

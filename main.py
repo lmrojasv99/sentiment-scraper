@@ -65,7 +65,11 @@ def progress_callback(current: int, total: int, article: Dict[str, Any]):
         _progress_start_time = now
         _progress_times = []
     
-    title = article.get('headline', article.get('news_title', 'Unknown'))[:40]
+    if isinstance(article, dict):
+        title = article.get('headline', article.get('news_title', 'Unknown'))[:40]
+    else:
+        title = str(article)[:40] if article else 'Unknown'
+        logger.warning(f"Unexpected article type: {type(article)}")
     
     # Calculate timing
     if _progress_start_time:
@@ -199,9 +203,17 @@ def main(
     
     # Scrape Articles from RSS feeds
     logger.info(f"📰 Scraping news articles (last {days} days)...")
-    articles = scraper.scrape_articles(days=days)
+    articles, scrape_elapsed = scraper.scrape_articles(days=days)
     
     logger.info(f"Found {len(articles)} relevant articles")
+    
+    # Debug: Check article structure
+    if articles:
+        logger.debug(f"First article type: {type(articles[0])}")
+        if isinstance(articles[0], dict):
+            logger.debug(f"First article keys: {list(articles[0].keys())}")
+        else:
+            logger.warning(f"Unexpected article structure: {articles[0][:100] if articles[0] else 'empty'}")
     
     if not articles:
         logger.warning("No articles found.")

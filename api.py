@@ -4,19 +4,34 @@ Deployed on Render to enable external access to the free-tier Postgres.
 """
 
 import os
+import sqlite3
+from pathlib import Path
 from flask import Flask, jsonify, request
 from functools import wraps
-import psycopg2
-from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 
+# Check if using PostgreSQL or SQLite
+def _use_postgres():
+    return bool(os.getenv("DATABASE_URL"))
+
 def get_db_connection():
-    """Get database connection."""
+    """Get database connection - supports both PostgreSQL and SQLite."""
     database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise Exception("DATABASE_URL not set")
-    return psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+    
+    if database_url:
+        # Use PostgreSQL
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        return psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+    else:
+        # Fall back to local SQLite
+        db_path = Path(__file__).parent / "data" / "geopolitical_monitor.db"
+        if not db_path.exists():
+            raise Exception(f"Local database not found at {db_path}")
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        return conn
 
 
 def handle_db_errors(f):
@@ -56,10 +71,12 @@ def stats():
     stats = {}
     
     cur.execute("SELECT COUNT(*) as count FROM articles")
-    stats["total_articles"] = cur.fetchone()["count"]
+    row = cur.fetchone()
+    stats["total_articles"] = row["count"] if isinstance(row, dict) else row[0]
     
     cur.execute("SELECT COUNT(*) as count FROM events")
-    stats["total_events"] = cur.fetchone()["count"]
+    row = cur.fetchone()
+    stats["total_events"] = row["count"] if isinstance(row, dict) else row[0]
     
     cur.execute("""
         SELECT dimension, COUNT(*) as count 
@@ -67,11 +84,19 @@ def stats():
         GROUP BY dimension 
         ORDER BY count DESC
     """)
-    stats["events_by_dimension"] = {row["dimension"]: row["count"] for row in cur.fetchall()}
+    rows = cur.fetchall()
+    stats["events_by_dimension"] = {
+        (row["dimension"] if isinstance(row, dict) else row[0]): (row["count"] if isinstance(row, dict) else row[1]) 
+        for row in rows
+    }
     
-    cur.execute("SELECT ROUND(AVG(sentiment)::numeric, 2) as avg FROM events")
+    if _use_postgres():
+        cur.execute("SELECT ROUND(AVG(sentiment)::numeric, 2) as avg FROM events")
+    else:
+        cur.execute("SELECT ROUND(AVG(sentiment), 2) as avg FROM events")
     row = cur.fetchone()
-    stats["avg_sentiment"] = float(row["avg"]) if row["avg"] else None
+    avg_val = row["avg"] if isinstance(row, dict) else row[0]
+    stats["avg_sentiment"] = float(avg_val) if avg_val else None
     
     conn.close()
     return jsonify(stats)
@@ -87,12 +112,20 @@ def list_articles():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    cur.execute("""
-        SELECT news_id, news_title, publication_date, source_url, source_domain, date_scraped
-        FROM articles
-        ORDER BY news_id DESC
-        LIMIT %s OFFSET %s
-    """, (limit, offset))
+    if _use_postgres():
+        cur.execute("""
+            SELECT news_id, news_title, publication_date, source_url, source_domain, date_scraped
+            FROM articles
+            ORDER BY news_id DESC
+            LIMIT %s OFFSET %s
+        """, (limit, offset))
+    else:
+        cur.execute("""
+            SELECT news_id, news_title, publication_date, source_url, source_domain, date_scraped
+            FROM articles
+            ORDER BY news_id DESC
+            LIMIT ? OFFSET ?
+        """, (limit, offset))
     
     articles = cur.fetchall()
     conn.close()
@@ -107,22 +140,34 @@ def get_article(article_id):
     conn = get_db_connection()
     cur = conn.cursor()
     
-    cur.execute("SELECT * FROM articles WHERE news_id = %s", (article_id,))
+    if _use_postgres():
+        cur.execute("SELECT * FROM articles WHERE news_id = %s", (article_id,))
+    else:
+        cur.execute("SELECT * FROM articles WHERE news_id = ?", (article_id,))
     article = cur.fetchone()
     
     if not article:
         conn.close()
         return jsonify({"error": "Article not found"}), 404
     
-    cur.execute("""
-        SELECT e.*, STRING_AGG(DISTINCT ea.actor_iso3, ',') as actors
-        FROM events e
-        LEFT JOIN event_actors ea ON e.event_id = ea.event_id
-        WHERE e.news_id = %s
-        GROUP BY e.id, e.event_id, e.news_id, e.event_summary, e.event_date,
-                 e.event_location, e.dimension, e.event_type, e.sub_dimension,
-                 e.direction, e.sentiment, e.confidence_level
-    """, (article_id,))
+    if _use_postgres():
+        cur.execute("""
+            SELECT e.*, STRING_AGG(DISTINCT ea.actor_iso3, ',') as actors
+            FROM events e
+            LEFT JOIN event_actors ea ON e.event_id = ea.event_id
+            WHERE e.news_id = %s
+            GROUP BY e.id, e.event_id, e.news_id, e.event_summary, e.event_date,
+                     e.event_location, e.dimension, e.event_type, e.sub_dimension,
+                     e.direction, e.sentiment, e.confidence_level
+        """, (article_id,))
+    else:
+        cur.execute("""
+            SELECT e.*, GROUP_CONCAT(DISTINCT ea.actor_iso3) as actors
+            FROM events e
+            LEFT JOIN event_actors ea ON e.event_id = ea.event_id
+            WHERE e.news_id = ?
+            GROUP BY e.event_id
+        """, (article_id,))
     events = cur.fetchall()
     
     conn.close()
@@ -144,25 +189,46 @@ def list_events():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    if dimension:
-        cur.execute("""
-            SELECT e.event_id, e.news_id, e.event_summary, e.dimension, 
-                   e.sub_dimension, e.sentiment, e.direction, a.news_title
-            FROM events e
-            JOIN articles a ON e.news_id = a.news_id
-            WHERE e.dimension = %s
-            ORDER BY e.id DESC
-            LIMIT %s OFFSET %s
-        """, (dimension, limit, offset))
+    if _use_postgres():
+        if dimension:
+            cur.execute("""
+                SELECT e.event_id, e.news_id, e.event_summary, e.dimension, 
+                       e.sub_dimension, e.sentiment, e.direction, a.news_title
+                FROM events e
+                JOIN articles a ON e.news_id = a.news_id
+                WHERE e.dimension = %s
+                ORDER BY e.id DESC
+                LIMIT %s OFFSET %s
+            """, (dimension, limit, offset))
+        else:
+            cur.execute("""
+                SELECT e.event_id, e.news_id, e.event_summary, e.dimension, 
+                       e.sub_dimension, e.sentiment, e.direction, a.news_title
+                FROM events e
+                JOIN articles a ON e.news_id = a.news_id
+                ORDER BY e.id DESC
+                LIMIT %s OFFSET %s
+            """, (limit, offset))
     else:
-        cur.execute("""
-            SELECT e.event_id, e.news_id, e.event_summary, e.dimension, 
-                   e.sub_dimension, e.sentiment, e.direction, a.news_title
-            FROM events e
-            JOIN articles a ON e.news_id = a.news_id
-            ORDER BY e.id DESC
-            LIMIT %s OFFSET %s
-        """, (limit, offset))
+        if dimension:
+            cur.execute("""
+                SELECT e.event_id, e.news_id, e.event_summary, e.dimension, 
+                       e.sub_dimension, e.sentiment, e.direction, a.news_title
+                FROM events e
+                JOIN articles a ON e.news_id = a.news_id
+                WHERE e.dimension = ?
+                ORDER BY e.id DESC
+                LIMIT ? OFFSET ?
+            """, (dimension, limit, offset))
+        else:
+            cur.execute("""
+                SELECT e.event_id, e.news_id, e.event_summary, e.dimension, 
+                       e.sub_dimension, e.sentiment, e.direction, a.news_title
+                FROM events e
+                JOIN articles a ON e.news_id = a.news_id
+                ORDER BY e.id DESC
+                LIMIT ? OFFSET ?
+            """, (limit, offset))
     
     events = cur.fetchall()
     conn.close()
@@ -177,23 +243,38 @@ def get_event(event_id):
     conn = get_db_connection()
     cur = conn.cursor()
     
-    cur.execute("""
-        SELECT e.*, a.news_title, a.source_url
-        FROM events e
-        JOIN articles a ON e.news_id = a.news_id
-        WHERE e.event_id = %s
-    """, (event_id,))
+    if _use_postgres():
+        cur.execute("""
+            SELECT e.*, a.news_title, a.source_url
+            FROM events e
+            JOIN articles a ON e.news_id = a.news_id
+            WHERE e.event_id = %s
+        """, (event_id,))
+    else:
+        cur.execute("""
+            SELECT e.*, a.news_title, a.source_url
+            FROM events e
+            JOIN articles a ON e.news_id = a.news_id
+            WHERE e.event_id = ?
+        """, (event_id,))
     event = cur.fetchone()
     
     if not event:
         conn.close()
         return jsonify({"error": "Event not found"}), 404
     
-    cur.execute("""
-        SELECT actor_iso3, actor_role
-        FROM event_actors
-        WHERE event_id = %s
-    """, (event_id,))
+    if _use_postgres():
+        cur.execute("""
+            SELECT actor_iso3, actor_role
+            FROM event_actors
+            WHERE event_id = %s
+        """, (event_id,))
+    else:
+        cur.execute("""
+            SELECT actor_iso3, actor_role
+            FROM event_actors
+            WHERE event_id = ?
+        """, (event_id,))
     actors = cur.fetchall()
     
     conn.close()
@@ -238,52 +319,100 @@ def full_export():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    cur.execute("""
-        SELECT 
-            a.news_id,
-            a.news_title,
-            SUBSTRING(a.news_text, 1, 500) as news_text_preview,
-            a.article_summary,
-            e.event_id,
-            e.event_summary,
-            a.publication_date,
-            e.event_date,
-            e.event_location,
-            e.dimension,
-            e.event_type,
-            e.sub_dimension,
-            (
-                SELECT STRING_AGG(DISTINCT ea.actor_iso3, ',')
-                FROM event_actors ea 
-                WHERE ea.event_id = e.event_id
-            ) as actor_list,
-            (
-                SELECT STRING_AGG(ea.actor_iso3, ',')
-                FROM event_actors ea 
-                WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor1'
-            ) as actor1,
-            (
-                SELECT STRING_AGG(ea.actor_iso3, ',')
-                FROM event_actors ea 
-                WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor1_secondary'
-            ) as actor1_secondary,
-            (
-                SELECT STRING_AGG(ea.actor_iso3, ',')
-                FROM event_actors ea 
-                WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor2'
-            ) as actor2,
-            (
-                SELECT STRING_AGG(ea.actor_iso3, ',')
-                FROM event_actors ea 
-                WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor2_secondary'
-            ) as actor2_secondary,
-            e.direction,
-            e.sentiment
-        FROM events e
-        JOIN articles a ON e.news_id = a.news_id
-        ORDER BY a.news_id, e.event_id
-        LIMIT %s
-    """, (limit,))
+    if _use_postgres():
+        cur.execute("""
+            SELECT 
+                a.news_id,
+                a.news_title,
+                SUBSTRING(a.news_text, 1, 500) as news_text_preview,
+                a.article_summary,
+                e.event_id,
+                e.event_summary,
+                a.publication_date,
+                e.event_date,
+                e.event_location,
+                e.dimension,
+                e.event_type,
+                e.sub_dimension,
+                (
+                    SELECT STRING_AGG(DISTINCT ea.actor_iso3, ',')
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id
+                ) as actor_list,
+                (
+                    SELECT STRING_AGG(ea.actor_iso3, ',')
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor1'
+                ) as actor1,
+                (
+                    SELECT STRING_AGG(ea.actor_iso3, ',')
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor1_secondary'
+                ) as actor1_secondary,
+                (
+                    SELECT STRING_AGG(ea.actor_iso3, ',')
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor2'
+                ) as actor2,
+                (
+                    SELECT STRING_AGG(ea.actor_iso3, ',')
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor2_secondary'
+                ) as actor2_secondary,
+                e.direction,
+                e.sentiment
+            FROM events e
+            JOIN articles a ON e.news_id = a.news_id
+            ORDER BY a.news_id, e.event_id
+            LIMIT %s
+        """, (limit,))
+    else:
+        cur.execute("""
+            SELECT 
+                a.news_id,
+                a.news_title,
+                SUBSTR(a.news_text, 1, 500) as news_text_preview,
+                a.article_summary,
+                e.event_id,
+                e.event_summary,
+                a.publication_date,
+                e.event_date,
+                e.event_location,
+                e.dimension,
+                e.event_type,
+                e.sub_dimension,
+                (
+                    SELECT GROUP_CONCAT(DISTINCT ea.actor_iso3)
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id
+                ) as actor_list,
+                (
+                    SELECT GROUP_CONCAT(ea.actor_iso3)
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor1'
+                ) as actor1,
+                (
+                    SELECT GROUP_CONCAT(ea.actor_iso3)
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor1_secondary'
+                ) as actor1_secondary,
+                (
+                    SELECT GROUP_CONCAT(ea.actor_iso3)
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor2'
+                ) as actor2,
+                (
+                    SELECT GROUP_CONCAT(ea.actor_iso3)
+                    FROM event_actors ea 
+                    WHERE ea.event_id = e.event_id AND ea.actor_role = 'actor2_secondary'
+                ) as actor2_secondary,
+                e.direction,
+                e.sentiment
+            FROM events e
+            JOIN articles a ON e.news_id = a.news_id
+            ORDER BY a.news_id, e.event_id
+            LIMIT ?
+        """, (limit,))
     
     rows = cur.fetchall()
     conn.close()
