@@ -104,3 +104,9 @@ pip-delete-this-directory.txt
 .Trashes
 ehthumbs.db
 
+# Local / one-off documents (do not commit)
+*.docx
+*.doc
+IMPLEMENTATION_PLAN.json
+REFACTOR_RECAP.md
+

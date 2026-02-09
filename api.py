@@ -157,7 +157,7 @@ def get_article(article_id):
             LEFT JOIN event_actors ea ON e.event_id = ea.event_id
             WHERE e.news_id = %s
             GROUP BY e.id, e.event_id, e.news_id, e.event_summary, e.event_date,
-                     e.event_location, e.dimension, e.event_type, e.sub_dimension,
+                     e.dimension, e.sub_dimension,
                      e.direction, e.sentiment, e.confidence_level
         """, (article_id,))
     else:
@@ -325,14 +325,12 @@ def full_export():
                 a.news_id,
                 a.news_title,
                 SUBSTRING(a.news_text, 1, 500) as news_text_preview,
-                a.article_summary,
+                a.language_detected,
                 e.event_id,
                 e.event_summary,
                 a.publication_date,
                 e.event_date,
-                e.event_location,
                 e.dimension,
-                e.event_type,
                 e.sub_dimension,
                 (
                     SELECT STRING_AGG(DISTINCT ea.actor_iso3, ',')
@@ -372,14 +370,12 @@ def full_export():
                 a.news_id,
                 a.news_title,
                 SUBSTR(a.news_text, 1, 500) as news_text_preview,
-                a.article_summary,
+                a.language_detected,
                 e.event_id,
                 e.event_summary,
                 a.publication_date,
                 e.event_date,
-                e.event_location,
                 e.dimension,
-                e.event_type,
                 e.sub_dimension,
                 (
                     SELECT GROUP_CONCAT(DISTINCT ea.actor_iso3)

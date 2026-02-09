@@ -19,7 +19,7 @@ class NewsScraper:
     Focuses on North American international relations (US, Canada, Mexico).
     """
     
-    def __init__(self, feeds_csv=None, keywords_csv=None):
+    def __init__(self, feeds_csv=None):
         self.user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         self.config = Config()
         self.config.browser_user_agent = self.user_agent
@@ -29,42 +29,28 @@ class NewsScraper:
         base_path = os.path.dirname(os.path.abspath(__file__))
         
         # Load RSS feeds from CSV
-        feeds_path = feeds_csv or os.path.join(base_path, 'rss_feed_links.csv')
+        feeds_path = feeds_csv or os.path.join(base_path, 'RSS_feeds.csv')
         self.rss_feeds = self._load_feeds_from_csv(feeds_path)
-        
-        # Load keywords from CSV
-        keywords_path = keywords_csv or os.path.join(base_path, 'keywords.csv')
-        self.relevance_keywords = self._load_keywords_from_csv(keywords_path)
+        # Keywords are no longer used by the scraper.
+        # International-context filtering happens post-translation in intl_filter.py.
     
     def _load_feeds_from_csv(self, csv_path):
-        """Load RSS feed URLs from a CSV file."""
+        """Load RSS feeds from CSV. Returns list of dicts with 'url' and 'country'."""
         feeds = []
         try:
             with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    feeds.append(row['url'])
+                    url = row.get('RSS_Feed') or row.get('url')
+                    country = row.get('Country', '').strip()
+                    if url and url.strip():
+                        feeds.append({'url': url.strip(), 'country': country})
             logger.info(f"Loaded {len(feeds)} RSS feeds from {csv_path}")
         except FileNotFoundError:
             logger.error(f"RSS feeds CSV not found: {csv_path}")
         except Exception as e:
             logger.error(f"Error loading RSS feeds: {e}")
         return feeds
-    
-    def _load_keywords_from_csv(self, csv_path):
-        """Load relevance keywords from a CSV file."""
-        keywords = []
-        try:
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    keywords.append(row['keyword'])
-            logger.info(f"Loaded {len(keywords)} keywords from {csv_path}")
-        except FileNotFoundError:
-            logger.error(f"Keywords CSV not found: {csv_path}")
-        except Exception as e:
-            logger.error(f"Error loading keywords: {e}")
-        return keywords
 
     def scrape_articles(self, days=5):
         """
@@ -82,10 +68,12 @@ class NewsScraper:
         
         logger.info(f"Starting scrape for articles from the last {days} day(s)...")
         
-        for feed_url in self.rss_feeds:
-            logger.info(f"Fetching RSS feed: {feed_url}")
+        for feed_info in self.rss_feeds:
+            feed_url = feed_info['url'] if isinstance(feed_info, dict) else feed_info
+            source_country = feed_info.get('country', '') if isinstance(feed_info, dict) else ''
+            logger.info(f"Fetching RSS feed: {feed_url} (country: {source_country or 'unknown'})")
             try:
-                articles = self._parse_feed(feed_url, cutoff_date, seen_urls)
+                articles = self._parse_feed(feed_url, cutoff_date, seen_urls, source_country)
                 all_articles.extend(articles)
                 time.sleep(random.uniform(0.5, 1.5))  # Be respectful to servers
             except Exception as e:
@@ -101,8 +89,8 @@ class NewsScraper:
         
         return all_articles, elapsed_time
 
-    def _parse_feed(self, feed_url, cutoff_date, seen_urls):
-        """Parse a single RSS feed and extract relevant articles."""
+    def _parse_feed(self, feed_url, cutoff_date, seen_urls, source_country=''):
+        """Parse a single RSS feed and extract articles (no relevance filter — that happens after translation)."""
         articles = []
         
         try:
@@ -113,7 +101,7 @@ class NewsScraper:
             logger.warning(f"Failed to fetch feed {feed_url}: {e}")
             return articles
         
-        for entry in feed.entries[:20]:  # Limit per feed
+        for entry in feed.entries:
             try:
                 # Get URL
                 url = entry.get('link', '')
@@ -123,13 +111,6 @@ class NewsScraper:
                 # Get title
                 title = entry.get('title', '')
                 if not title:
-                    continue
-                
-                # Check relevance based on title and summary
-                summary = entry.get('summary', entry.get('description', ''))
-                combined_text = f"{title} {summary}".lower()
-                
-                if not self._is_relevant(combined_text):
                     continue
                 
                 # Parse publication date
@@ -148,43 +129,19 @@ class NewsScraper:
                         'headline': title,
                         'published_date': pub_date.isoformat() if pub_date else datetime.now().isoformat(),
                         'source': feed.feed.get('title', 'Unknown'),
+                        'source_country': source_country,
                         'article_text': content
                     })
-                    logger.info(f"✓ Found relevant article: {title[:60]}...")
+                    logger.info(f"✓ Scraped article: {title[:60]}...")
                     
             except Exception as e:
                 logger.debug(f"Error processing entry: {e}")
                 continue
         
         return articles
-
-    def _is_relevant(self, text):
-        """Check if article is relevant to North American international relations."""
-        text_lower = text.lower()
-        
-        # Must mention at least one North American country
-        na_mentions = sum([
-            any(kw in text_lower for kw in ['united states', 'usa', 'u.s.', 'america', 'american', 'washington', 'biden', 'trump']),
-            any(kw in text_lower for kw in ['canada', 'canadian', 'ottawa', 'trudeau']),
-            any(kw in text_lower for kw in ['mexico', 'mexican', 'amlo', 'sheinbaum'])
-        ])
-        
-        if na_mentions == 0:
-            return False
-        
-        # Check for international relations keywords
-        relations_keywords = [
-            'trade', 'tariff', 'border', 'immigration', 'migrant',
-            'diplomacy', 'treaty', 'agreement', 'relation', 'summit',
-            'sanction', 'embargo', 'cooperation', 'alliance', 'tension',
-            'bilateral', 'trilateral', 'nafta', 'usmca', 'foreign',
-            'minister', 'ambassador', 'president', 'prime minister'
-        ]
-        
-        has_relations_context = any(kw in text_lower for kw in relations_keywords)
-        
-        # More lenient: if 2+ NA countries mentioned, likely relevant
-        return has_relations_context or na_mentions >= 2
+    # NOTE: _is_relevant() has been removed.
+    # Relevance filtering now happens AFTER translation, in the
+    # international context filter (src/utils/intl_filter.py).
 
     def _parse_date(self, entry):
         """Parse publication date from feed entry."""

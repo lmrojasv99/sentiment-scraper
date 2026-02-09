@@ -21,3 +21,12 @@ openai>=1.0.0
 # API Server
 flask>=3.0.0
 gunicorn>=21.0.0
+
+# Translation (MarianMT via Hugging Face)
+transformers>=4.36.0
+torch>=2.1.0
+sentencepiece>=0.1.99
+
+# Language Detection & NLP
+langdetect>=1.0.9
+spacy>=3.7.0

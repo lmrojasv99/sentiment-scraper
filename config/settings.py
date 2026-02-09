@@ -20,33 +20,19 @@ SRC_DATA_DIR = PROJECT_ROOT / "src" / "data"
 
 
 def _load_rss_feeds_from_csv() -> List[str]:
-    """Load RSS feeds from CSV file."""
-    csv_path = SRC_DATA_DIR / "rss_feeds.csv"
+    """Load RSS feeds from CSV file (RSS_feeds.csv: column RSS_Feed or url)."""
+    csv_path = SRC_DATA_DIR / "RSS_feeds.csv"
     feeds = []
     try:
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                if row.get('url'):
-                    feeds.append(row['url'])
+                url = row.get('RSS_Feed') or row.get('url')
+                if url and url.strip():
+                    feeds.append(url.strip())
     except FileNotFoundError:
         pass  # Will use hardcoded fallback
     return feeds
-
-
-def _load_keywords_from_csv() -> List[str]:
-    """Load keywords from CSV file."""
-    csv_path = SRC_DATA_DIR / "keywords.csv"
-    keywords = []
-    try:
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row.get('keyword'):
-                    keywords.append(row['keyword'].lower())
-    except FileNotFoundError:
-        pass  # Will use hardcoded fallback
-    return keywords
 
 
 @dataclass
@@ -103,17 +89,8 @@ class Settings:
         "https://mexiconewsdaily.com/feed/",
     ])
     
-    # Relevance Keywords - loaded from CSV, with hardcoded fallback
-    relevance_keywords: List[str] = field(default_factory=lambda: _load_keywords_from_csv() or [
-        # Fallback if CSV not found
-        'united states', 'usa', 'u.s.', 'america', 'american', 'washington',
-        'canada', 'canadian', 'ottawa', 'trudeau',
-        'mexico', 'mexican', 'amlo', 'sheinbaum',
-        'trade', 'tariff', 'nafta', 'usmca', 'border', 'immigration',
-        'diplomacy', 'treaty', 'agreement', 'relations', 'summit',
-        'sanction', 'embargo', 'cooperation', 'alliance', 'tension',
-        'bilateral', 'trilateral', 'north america'
-    ])
+    # NOTE: Keyword-based relevance filtering is now handled by
+    # src/utils/intl_filter.py with its own keyword list.
     
     def __post_init__(self):
         """Ensure data directory exists."""

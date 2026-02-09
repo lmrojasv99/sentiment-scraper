@@ -21,12 +21,13 @@ CREATE TABLE IF NOT EXISTS articles (
     news_id INTEGER PRIMARY KEY,
     news_title TEXT NOT NULL,
     news_text TEXT,
-    article_summary TEXT,
+    article_summary TEXT,          -- DEPRECATED: no longer populated by GPT
     publication_date TEXT,
     source_url TEXT UNIQUE,
     source_domain TEXT,
     source_country TEXT,
     language TEXT DEFAULT 'en',
+    language_detected TEXT,
     date_scraped TEXT
 );
 
@@ -41,9 +42,9 @@ CREATE TABLE IF NOT EXISTS events (
     news_id INTEGER NOT NULL,
     event_summary TEXT,
     event_date TEXT,
-    event_location TEXT,
+    event_location TEXT,           -- DEPRECATED: no longer populated by GPT
     dimension TEXT,
-    event_type TEXT,
+    event_type TEXT,               -- DEPRECATED: no longer populated by GPT
     sub_dimension TEXT,
     direction TEXT CHECK(direction IN ('unilateral', 'bilateral', 'multilateral')),
     sentiment REAL CHECK(sentiment >= -10 AND sentiment <= 10),

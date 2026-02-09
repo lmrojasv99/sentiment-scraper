@@ -1,12 +1,265 @@
-url,source,description
-https://www.rss.app/feeds/tswtMNNRqiPOqVe6.xml,Reuters,Reuters World
-https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml,BBC,BBC US and Canada
-https://feeds.bbci.co.uk/news/world/rss.xml,BBC,BBC World
-https://feeds.npr.org/1004/rss.xml,NPR,NPR World
-https://www.theguardian.com/world/americas/rss,The Guardian,Guardian Americas
-https://www.theguardian.com/us-news/rss,The Guardian,Guardian US News
-https://www.aljazeera.com/xml/rss/all.xml,Al Jazeera,Al Jazeera All
-https://rsshub.app/apnews/topics/world-news,Associated Press,AP World News
-https://www.cbc.ca/webfeed/rss/rss-world,CBC,CBC World
-https://www.cbc.ca/webfeed/rss/rss-politics,CBC,CBC Politics
-https://mexiconewsdaily.com/feed/,Mexico News Daily,Mexico News Daily
+Country,Source,RSS_Feed
+Afghanistan,ariananews.af,https://www.ariananews.af/feed/
+Afghanistan,bakhtarnews.af,https://bakhtarnews.af/feed/
+Afghanistan,pajhwok.com,https://pajhwok.com/feed/
+Albania,abcnews.al,https://abcnews.al/feed/
+Algeria,algerie360.com,https://www.algerie360.com/feed/
+Andorra,fotomac.com.tr,https://www.fotomac.com.tr/rss/anasayfa.xml
+Angola,jornalf8.net,https://jornalf8.net/feed/
+Angola,mercado.co.ao,https://mercado.co.ao/feed/
+Angola,rna.ao,https://rna.ao/rna.ao/feed/
+Argentina,lanacion.com.ar,https://www.lanacion.com.ar/arc/outboundfeeds/rss/?outputType=xml
+Armenia,armenpress.am,https://news.google.com/rss/search?q=site%3Aarmenpress.am&hl=en-US&gl=US&ceid=US:en
+Armenia,armradio.am,https://en.armradio.am/feed/
+Armenia,panarmenian.net,https://stickers.panarmenian.net/feeds/eng_news.rss
+Australia,abc.net.au,https://www.abc.net.au/news/feed/51120/rss.xml
+Austria,orf.at,https://rss.orf.at/news.xml
+Azerbaijan,trend.az,https://www.trend.az/feeds/index.rss
+Bahamas,bahamaspress.com,https://www.bahamaspress.com/feed/
+Bahamas,thenassauguardian.com,https://www.thenassauguardian.com/search/?f=rss&t=article&l=50&s=start_time&sd=desc&k%5B%5D=%23topstory
+Bahamas,tribune242.com,https://www.tribune242.com/rss/headlines/
+Bahrain,bahrainmirror.com,https://bahrainmirror.com/rss.xml
+Bahrain,thejapannews.net,https://feeds.thejapannews.net/rss/c4f2dd8ca8c78044
+Barbados,barbadostoday.bb,https://barbadostoday.bb/feed/
+Barbados,cbc.bb,https://www.cbc.bb/feed/
+Barbados,nationnews.com,https://nationnews.com/feed/
+Belarus,belta.by,https://eng.belta.by/rss
+Belgium,lavenir.net,https://www.lavenir.net/arc/outboundfeeds/rss/section/actu/belgique/?outputType=xml
+Belize,channel5belize.com,https://www.greaterbelize.com/feed/
+Benin,lanouvelletribune.info,https://lanouvelletribune.info/feed/
+Bermuda,bernews.com,https://bernews.com/feed/
+Bhutan,businessbhutan.bt,https://businessbhutan.bt/feed/
+Bhutan,thebhutanese.bt,https://thebhutanese.bt/feed/
+Bolivia,opinion.com.bo,https://www.opinion.com.bo/rss/
+Bosnia and Herzegovina,vijesti.ba,https://www.vijesti.ba/rss/svevijesti
+Botswana,businessweekly.co.bw,https://businessweekly.co.bw/feed
+Botswana,sundaystandard.info,https://www.sundaystandard.info/feed/
+Botswana,thegazette.news,https://www.thegazette.news/feed/
+Botswana,thevoicebw.com,https://thevoicebw.com/feed/
+Botswana,weekendpost.co.bw,https://weekendpost.co.bw/feed/
+Brazil,g1.globo.com,https://g1.globo.com/rss/g1/
+Brunei,borneobulletin.com.bn,https://borneobulletin.com.bn/feed/
+Bulgaria,btvnovinite.bg,https://btvnovinite.bg/lbin/v3/rss.php
+Burkina Faso,sidwaya.info,https://www.sidwaya.info/feed/
+Burundi,netpress.com.mk,https://netpress.com.mk/feed/
+Cambodia,dap-news.com,https://dap-news.com/feed/
+Cameroon,camer.be,https://camer.be/rss
+Cameroon,crtv.cm,https://crtv.cm/feed/
+Cameroon,journalducameroun.com,https://news.google.com/rss/search?q=site%3Ajournalducameroun.com&hl=en-US&gl=US&ceid=US:en
+Cape Verde,anacao.cv,https://www.anacao.cv/feed/
+Cape Verde,expressodasilhas.cv,https://expressodasilhas.cv/rss
+Cape Verde,terranova.cv,https://terranova.cv/pt_PT/feed/
+Central African Republic,acap.cf,https://news.google.com/rss/search?q=site%3Aacap.cf&hl=en-US&gl=US&ceid=US:en
+Central African Republic,ndjonisango.com,https://ndjonisango.com/feed/
+Chad,tchadinfos.com,https://tchadinfos.com/feed/
+Chile,df.cl,https://news.google.com/rss/search?q=site%3Adf.cl&hl=en-US&gl=US&ceid=US:en
+China,scmp.com,https://www.scmp.com/rss/feed/
+Colombia,elespectador.com,https://www.elespectador.com/arc/outboundfeeds/discover/?outputType=xml
+Colombia,eltiempo.com,https://www.eltiempo.com/rss/mundo.xml
+Costa Rica,nacion.com,https://www.nacion.com/arc/outboundfeeds/rss/?outputType=xml
+Croatia,vecernji.hr,https://www.vecernji.hr/feeds/latest
+Cuba,cubadebate.cu,http://www.cubadebate.cu/feed/
+Cyprus,sigmalive.com,https://www.sigmalive.com/rss
+Czech Republic,idnes.cz,https://servis.idnes.cz/rss.aspx
+Democratic People’s Republic of Korea (North Korea),chosonsinbo.com,https://chosonsinbo.com/feed/
+Democratic People’s Republic of Korea (North Korea),dailynk.com,https://www.dailynk.com/feed/
+Democratic People’s Republic of Korea (North Korea),nknews.org,https://www.nknews.org/feed/
+Democratic Republic of the Congo,acpcongo.com,https://acpcongo.com/feed/
+Denmark,cphpost.dk,https://cphpost.dk/feed/
+Djibouti,lanation.dj,https://www.lanation.dj/feed/
+Ecuador,eldiario.ec,https://eldiario.ec/rss/global.xml
+Egypt,aljazeera.net,https://www.aljazeera.net/aljazeera/rss.xml
+Egypt,egyptindependent.com,https://egyptindependent.com/feed/
+El Salvador,croniosv.com,https://croniosv.com/feed/
+Eritrea,awate.com,https://awate.com/feed/
+Eritrea,asmarino.com,https://asmarino.com/?format=feed&type=rss
+Eritrea,erena.org,https://news.google.com/rss/search?q=site%3Aerena.org&hl=en-US&gl=US&ceid=US:en
+Estonia,postimees.ee,https://www.postimees.ee/rss
+Eswatini (Swaziland),times.co.sz,https://news.google.com/rss/search?q=site%3Atimes.co.sz&hl=en-US&gl=US&ceid=US:en
+Ethiopia,addisstandard.com,https://addisstandard.com/feed/
+Ethiopia,amharic.voanews.com,https://amharic.voanews.com/api/
+Ethiopia,ethiopianbusinessreview.net,https://ethiopianbusinessreview.net/feed/
+Ethiopia,nbcethiopia.com,https://nbcethiopia.com/feed/
+Ethiopia,thehabesha.com,https://www.euronews.com/rss?format=mrss&level=theme&name=news
+Ethiopia,fanabc.com,https://www.fanamc.com/feed
+Europe,euronews.com,https://www.euronews.com/rss?format=mrss&level=theme&name=news
+Europe,monde-diplomatique.fr,https://www.monde-diplomatique.fr/rss/
+Europe,rferl.org,https://www.rferl.org/api/
+Fiji,fbcnews.com.fj,https://www.fbcnews.com.fj/feed/
+Fiji,fijisun.com.fj,https://news.google.com/rss/search?q=site%3Afijisun.com.fj&hl=en-US&gl=US&ceid=US:en
+Fiji,islandsbusiness.com,https://islandsbusiness.com/feed/
+Finland,iltalehti.fi,https://www.iltalehti.fi/rss.xml
+France,lemonde.fr,https://www.lemonde.fr/rss/une.xml
+Gabon,gabonreview.com,https://www.gabonreview.com/feed/
+Gambia,standard.gm,https://standard.gm/feed/
+Gambia,thepoint.gm,https://thepoint.gm/posts/rss/xml
+Georgia,civil.ge,https://civil.ge/feed
+Georgia,finchannel.com,https://finchannel.com/feed/
+Germany,zeit.de,https://newsfeed.zeit.de/index
+Ghana,myjoyonline.com,https://www.myjoyonline.com/feed/
+Greece,tanea.gr,https://www.tanea.gr/feed/
+Grenada,nowgrenada.com,https://nowgrenada.com/feed/
+Grenada,weefmgrenada.com,https://www.weefmgrenada.com/feed/
+Guatemala,prensalibre.com,https://www.prensalibre.com/feed/
+Guinea,guineenews.org,https://guineenews.org/feed/
+Guinea-Bissau,faladepapagaio.blogspot.com,https://faladepapagaio.blogspot.com/feeds/posts/default?alt=rss
+Guyana,stabroeknews.com,https://www.stabroeknews.com/feed/
+Haiti,haitilibre.com,https://www.haitilibre.com/rss-dossiers.php
+Honduras,latribuna.hn,https://news.google.com/rss/search?q=site%3Alatribuna.hn&hl=en-US&gl=US&ceid=US:en
+Hungary,budapesttimes.hu,https://www.budapesttimes.hu/feed/
+Iceland,mbl.is,https://www.mbl.is/feeds/fp/
+India,thehindu.com,https://www.thehindu.com/feeder/default.rss
+Indonesia,tempo.co,https://rss.tempo.co/
+Iran,mehrnews.com,https://www.mehrnews.com/rss
+Iraq,shafaq.com,https://news.google.com/rss/search?q=site%3Ashafaq.com&hl=en-US&gl=US&ceid=US:en
+Ireland,irishtimes.com,https://news.google.com/rss/search?q=site%3Airishtimes.com&hl=en-US&gl=US&ceid=US:en
+Israel,haaretz.com,https://news.google.com/rss/search?q=site%3Ahaaretz.com&hl=en-US&gl=US&ceid=US:en
+Italy,lastampa.it,https://www.lastampa.it/rss/copertina.xml
+Jamaica,jamaica-gleaner.com,https://jamaica-gleaner.com/feed/news.xml
+Jamaica,loopjamaica.com,https://www.loopnews.com/feed/
+Japan,asia.nikkei.com,https://news.google.com/rss/search?q=site%3Aasia.nikkei.com&hl=en-US&gl=US&ceid=US:en
+Japan,english.kyodonews.net,https://news.google.com/rss/search?q=site%3Aenglish.kyodonews.net&hl=en-US&gl=US&ceid=US:en
+Japan,www3.nhk.or.jp,https://news.google.com/rss/search?q=site%3Awww3.nhk.or.jp&hl=en-US&gl=US&ceid=US:en
+Japan,japantimes.co.jp,https://www.japantimes.co.jp/feed/
+Jordan,jordantimes.com,https://jordantimes.com/rss-feed/47
+Jordan,alghad.com,https://alghad.com/rss
+Kazakhstan,astanatimes.com,https://astanatimes.com/feed/
+Kenya,nation.africa,https://nation.africa/kenya/rss.xml
+Kiribati,theguardian.com,https://www.theguardian.com/international/rss
+Kuwait,arabtimesonline.com,https://www.arabtimesonline.com/rssfeed/47/
+Kyrgyzstan,24.kg,https://24.kg/oshskie_sobytija/rss/
+Latvia,Apollo.lv,https://www.apollo.lv/rss
+Lebanon,naharnet.com,https://naharnet.com/tags/lebanon/en/feed.atom
+Lesotho,lestimes.com,https://lestimes.com/?feed=rss2
+Lesotho,publiceyenews.com,https://publiceyenews.com/feed/
+Liberia,thenewdawnliberia.com,https://www.thenewdawnliberia.com/feed/
+Libya,libyaherald.com,https://libyaherald.com/feed/
+Libya,researchsnipers.com,https://researchsnipers.com/feed/
+Lithuania,lrt.lt,https://www.lrt.lt/?rss
+Luxembourg,rtl.lu,https://www.rtl.lu/news/international.rss
+Madagascar,lexpress.mg,https://www.lexpress.mg/feeds/posts/default?alt=rss
+Madagascar,midi-madagasikara.mg,https://midi-madagasikara.mg/feed/
+Malawi,capitalradiomalawi.com,https://news.google.com/rss/search?q=site%3Acapitalradiomalawi.com&hl=en-US&gl=US&ceid=US:en
+Malawi,malawi24.com,https://malawi24.com/feed/
+Malawi,mwnation.com,https://mwnation.com/feed/
+Malawi,nyasatimes.com,https://www.nyasatimes.com/feed/
+Malawi,times.mw,https://times.mw/feed/
+Malaysia,malaysiakini.com,https://www.malaysiakini.com/rss/en/news.rss
+Mali,amap.ml,https://amap.ml/feed/
+Mali,journaldumali.com,https://journaldumali.com/feed/
+Malta,lovinmalta.com,https://lovinmalta.com/feed/
+Mexico,reforma.com,https://www.reforma.com/rss/portada.xml
+Moldova,unimedia.info,https://unimedia.info/ro/rss/all/
+Monaco,monacolife.net,https://monacolife.net/feed/
+Mongolia,undesten.mn,http://undesten.mn/feed
+Montenegro,vijesti.me,https://www.vijesti.me/rss
+Morocco,hespress.com,https://www.hespress.com/feed
+Mozambique,opais.co.mz,https://opais.co.mz/feed/
+Mozambique,rm.co.mz,https://www.rm.co.mz/feed/
+Myanmar (Burma),irrawaddy.com,https://www.irrawaddy.com/feed
+Namibia,namibian.com.na,https://www.namibian.com.na/feed/
+Nepal,onlinekhabar.com,https://www.onlinekhabar.com/feed
+Netherlands,nrc.nl,https://www.nrc.nl/rss/
+New Zealand,odt.co.nz,https://www.odt.co.nz/news/feed
+Nicaragua,nuevaya.com.ni,view-source:https://nuevaya.com.ni/feed/
+Niger,lesahel.org,https://www.lesahel.org/feed/
+Nigeria,punchng.com,https://rss.punchng.com/v1/category/latest_news
+North Macedonia,novamakedonija.com.mk,https://novamakedonija.com.mk/feed/
+Norway,aftenposten.no,https://www.aftenposten.no/rss/
+Pakistan,dawn.com,https://www.dawn.com/feeds/home/
+Panama,laprensa.com.pa,https://www.prensa.com/arc/outboundfeeds/rss/?outputType=xml
+Papua New Guinea,postcourier.com.pg,https://www.postcourier.com.pg/feed/
+Papua New Guinea,thenational.com.pg,https://www.thenational.com.pg/feed/
+Paraguay,tnpress.com.py,https://www.tnpress.com.py/feed/
+Peru,elcomercio.pe,https://elcomercio.pe/arc/outboundfeeds/rss/?outputType=xml
+Philippines,tribune.net.ph,https://prod-qt-images.s3.amazonaws.com/production/tribune/feed.xml
+Poland,rp.pl,https://www.rp.pl/rss_main
+Portugal,rr.pt,https://rr.pt/rssfeed-ultimas
+Portugal,sic.pt,https://rss.impresa.pt/feed/latest/sic.rss?type=ARTICLE,VIDEO,GALLERY,STREAM,PLAYLIST,EVENT,NEWSLETTER&limit=20&pubsubhub=true
+Qatar,aljazeera.com,https://www.aljazeera.com/xml/rss/all.xml
+Qatar,dohanews.co,https://dohanews.co/feed/
+Republic of the Congo,tribune242.com,https://www.tribune242.com/rss/headlines/
+Romania,adevarul.ro,https://adevarul.ro/rss/index
+Russia,rt.com,https://www.rt.com/rss/
+Russia,ria.ru,https://ria.ru/export/rss2/archive/index.xml
+Russia,themoscowtimes.com,https://www.themoscowtimes.com/rss/news
+Saint Kitts and Nevis,nevispages.com,https://www.nevispages.com/feed/
+San Marino,libertas.sm,https://www.libertas.sm/feed/
+Saudi Arabia,albiladdaily.com,https://albiladdaily.com/feed/
+Senegal,dakaractu.com,https://www.dakaractu.com/xml/syndication.rss
+Serbia,kurir.rs,https://www.kurir.rs/rss
+Sierra Leone,cocorioko.net,https://cocorioko.net/feed/
+Sierra Leone,sierraleonepress.com,https://www.sierraleonepress.com/feed/
+Singapore,straitstimes.com,https://www.straitstimes.com/news/world/rss.xml
+Slovakia,dennikn.sk,https://dennikn.sk/feed/
+Slovenia,delo.si,https://www.delo.si/rss
+Somalia,hiiraan.com,https://hiiraan.com/news.xml
+South Africa,mg.co.za,https://mg.co.za/feed/
+South Africa,news24.com,https://news.google.com/rss/search?q=site%3Anews24.com&hl=en-US&gl=US&ceid=US:en
+South Korea,asiae.co.kr,https://www.asiae.co.kr/news/rss/asia_rss.htm
+South Sudan,eyeradio.org,https://www.eyeradio.org/feed/
+Spain,abc.es,https://www.abc.es/rss/2.0/portada/
+Sri Lanka,island.lk,https://island.lk/feed/
+Sudan,alnilin.com,https://www.alnilin.com/feed
+Suriname,dwtonline.com,https://dwtonline.com/feed/
+Sweden,svt.se,https://www.svt.se/rss.xml
+Switzerland,nzz.ch,https://news.google.com/rss/search?q=site%3Anzz.ch&hl=en-US&gl=US&ceid=US:en
+Syria,sana.sy,https://sana.sy/feed/
+Taiwan,taipeitimes.com,https://www.taipeitimes.com/xml/index.rss
+Tajikistan,asiaplustj.info,https://asiaplustj.info/ru/rss.xml
+Tanzania,jamhurimedia.co.tz,https://www.jamhurimedia.co.tz/feed/
+Thailand,matichon.co.th,https://www.matichon.co.th/feed
+Timor-Leste,rttlep.tl,https://rttlep.tl/feed/
+Togo,atop.tg,https://atop.tg/feed/
+Togo,icilome.com,https://icilome.com/feed/
+Togo,togoactualite.com,https://togoactualite.com/feed/
+Trinidad and Tobago,newsday.co.tt,https://newsday.co.tt/feed/
+Trinidad and Tobago,trinidadexpress.com,https://news.google.com/rss/search?q=site%3Atrinidadexpress.com&hl=en-US&gl=US&ceid=US:en
+Tunisia,lapresse.tn,https://www.lapresse.tn/feed/
+Turkey,cumhuriyet.com.tr,https://news.google.com/rss/search?q=site%3Acumhuriyet.com.tr&hl=en-US&gl=US&ceid=US:en
+Turkmenistan,turkmenistan.ru,https://www.turkmenistan.ru/ru/taxonomy/term/3/all/feed
+Uganda,independent.co.ug,https://www.independent.co.ug/feed/
+Ukraine,kyivpost.com,https://www.kyivpost.com/feed
+United Kingdom,economist.com,https://news.google.com/rss/search?q=site%3Aeconomist.com&hl=en-US&gl=US&ceid=US:en
+United Kingdom,ft.com,https://www.ft.com/rss/home/international
+United Kingdom,reuters.com,https://news.google.com/rss/search?q=site%3Areuters.com&hl=en-US&gl=US&ceid=US:en
+United States,apnews.com,https://apnews.com/index.rss
+United States,latimes.com,https://www.latimes.com/world/rss2.0.xml
+United States,nytimes.com,https://rss.nytimes.com/services/xml/rss/nyt/World.xml
+Uruguay,ladiaria.com.uy,https://ladiaria.com.uy/feeds/articulos/
+Uzbekistan,gazeta.uz,https://www.gazeta.uz/oz/rss/
+Uzbekistan,kun.uz,https://kun.uz/news/rss
+Vanuatu,dailypost.vu,https://news.google.com/rss/search?q=site%3Adailypost.vu&hl=en-US&gl=US&ceid=US:en
+Venezuela,elnacional.com,https://www.elnacional.com/feed/
+Vietnam,tuoitrenews.vn,https://news.tuoitre.vn/home.rss
+Zambia,daily-mail.co.zm,https://www.daily-mail.co.zm/feed/
+Zambia,lusakatimes.com,https://www.lusakatimes.com/feed/
+Zimbabwe,chronicle.co.zw,https://www.heraldonline.co.zw/feed/
+Antigua and Barbuda,abstvradio.com,https://abstvradio.com/feed/
+Bangladesh,dhakatribune.com,https://www.dhakatribune.com/feed/
+Canada,globalnews.ca,https://globalnews.ca/feed/
+Comoros,comores-infos.net,https://www.comoresinfos.net/feed/
+Dominica,thesundominica.com,https://news.google.com/rss/search?q=site:thesundominica.com&hl=en-US&gl=US&ceid=US:en
+Dominican Republic,listindiario.com,https://news.google.com/rss/search?q=site:listindiario.com&hl=en-US&gl=US&ceid=US:en
+Equatorial Guinea,ahoraeg.com,https://ahoraeg.com/feed/
+Ivory Coast,aip.ci,https://www.aip.ci/feed/
+Laos,laotiantimes.com,https://laotiantimes.com/feed/
+Liechtenstein,liechtenstein.li,https://news.google.com/rss/search?q=site:liechtenstein.li&hl=en-US&gl=US&ceid=US:en
+Maldives,maldivesindependent.com,https://maldivesindependent.com/api/rss
+Marshall Islands,marshallislandsjournal.com,https://marshallislandsjournal.com/feed/
+Mauritania,mauritanieinfo.com,https://news.google.com/rss/search?q=site:mauritanieinfo.com&hl=en-US&gl=US&ceid=US:en
+Mauritius,ionnews.mu,https://ionnews.mu/feed/
+Micronesia (Federated States of),micronesianews.com,https://news.google.com/rss/search?q=site:micronesianews.com&hl=en-US&gl=US&ceid=US:en
+Nepal,myrepublica.nagariknetwork.com,https://myrepublica.nagariknetwork.com/feeds
+Oman,muscatdaily.com,https://www.muscatdaily.com/category/oman/feed/
+Palau,palautoday.com,https://news.google.com/rss/search?q=site:palautoday.com&hl=en-US&gl=US&ceid=US:en
+Saint Lucia,thevoiceslu.com,https://thevoiceslu.com/feed/
+Saint Vincent and the Grenadines,vincynewz.com,https://news.google.com/rss/search?q=site:vincynewz.com&hl=en-US&gl=US&ceid=US:en
+Samoa,samoanews.com,https://samoanews.com/rss1.xml
+Sao Tome and Principe,stp-press.st,https://www.stp-press.st/feed/
+Seychelles,seychellesnewsagency.com,https://www.seychellesnewsagency.com/public/rss-feed
+Solomon Islands,sibconline.com.sb,https://www.sibconline.com.sb/feed/
+Tonga,kanivatonga.nz,https://kanivatonga.co.nz/feed/
+Uganda,independent.co.ug,https://www.independent.co.ug/feed/
+United Arab Emirates,arabianbusiness.com,https://www.arabianbusiness.com/feed
+Yemen,7iber.com,https://www.7iber.com/feed/

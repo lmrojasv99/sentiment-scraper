@@ -38,13 +38,10 @@ You receive a JSON object: {"news_id", "title", "text", "publication_date", "sou
 
 <extraction_steps>
 
-## Step 1: Article Summary
-Write ONE concise summary (max 500 chars) capturing the article's main international relations content. Include this identical summary in EVERY event from this article.
-
-## Step 2: Identify Events
+## Step 1: Identify Events
 Find all DISTINCT international interactions involving 2+ sovereign states. Each unique action/interaction = separate event.
 
-## Step 3: Classify Each Event
+## Step 2: Classify Each Event
 
 **Dimension → Sub-dimensions:**
 | Dimension | Sub-dimensions |
@@ -54,21 +51,19 @@ Find all DISTINCT international interactions involving 2+ sovereign states. Each
 | Economic Relations | trade, investment, aid, capital_flows, financial_monetary, development, taxation_fiscal, resources, labour_migration, technology_transfer, strategic_economic, economic |
 | Other | disaster, disease, resource, historical, hypothetical, culture |
 
-**Event Type:** Brief label describing the action (e.g., "sanctions", "trade agreement", "military exercise", "diplomatic visit", "expulsion", "peace talks")
-
-## Step 4: Assign Actor Roles (all in ISO-3 codes)
+## Step 3: Assign Actor Roles (all in ISO-3 codes)
 - **actor1**: Primary actor(s) INITIATING/DRIVING the action
 - **actor2**: Primary actor(s) RECEIVING/TARGETED by the action
 - **actor1_secondary**: Supporting/allied countries backing actor1 (empty string if none)
 - **actor2_secondary**: Supporting/allied countries backing actor2 (empty string if none)
 - **actor_list**: All unique countries involved, sorted alphabetically
 
-## Step 5: Determine Direction
+## Step 4: Determine Direction
 - **unilateral**: One-way action (A acts upon B, no reciprocity)
 - **bilateral**: Two-way symmetric interaction (A and B mutually engage)
 - **multilateral**: 3+ countries jointly participating in coordinated action
 
-## Step 6: Score Sentiment (-10 to +10)
+## Step 5: Score Sentiment (-10 to +10)
 | Score | Meaning | Examples |
 |-------|---------|----------|
 | -10 to -7 | Severe hostility | War declaration, invasion, armed conflict, genocide |
@@ -86,12 +81,9 @@ Find all DISTINCT international interactions involving 2+ sovereign states. Each
 {
   "events": [
     {
-      "article_summary": "string (max 500 chars, same for all events from article)",
       "event_id": "string (format: news_id-N where N is sequence number)",
       "event_date": "string (YYYY-MM-DD, infer from article or use publication_date)",
-      "event_location": "string (city/country where event occurred, or empty string)",
       "event_summary": "string (max 400 chars, specific to THIS event)",
-      "event_type": "string (brief action label)",
       "dimension": "string (one of: Political Relations, Material Conflict, Economic Relations, Other)",
       "sub_dimension": "string (from dimension's sub-dimension list)",
       "actor_list": ["ISO3", "ISO3"],
@@ -115,12 +107,9 @@ OUTPUT:
 {
   "events": [
     {
-      "article_summary": "The United States imposed new sanctions on Russia over Ukraine-related aggression, receiving EU support while China criticized the unilateral measures.",
       "event_id": "12345-1",
       "event_date": "2024-03-15",
-      "event_location": "Washington",
       "event_summary": "United States imposes sweeping sanctions against Russian banks and officials in response to continued Russian aggression in Ukraine.",
-      "event_type": "sanctions",
       "dimension": "Economic Relations",
       "sub_dimension": "financial_monetary",
       "actor_list": ["RUS", "UKR", "USA"],
@@ -132,12 +121,9 @@ OUTPUT:
       "sentiment": -5
     },
     {
-      "article_summary": "The United States imposed new sanctions on Russia over Ukraine-related aggression, receiving EU support while China criticized the unilateral measures.",
       "event_id": "12345-2",
       "event_date": "2024-03-15",
-      "event_location": "",
       "event_summary": "China publicly criticizes US sanctions against Russia, opposing what it characterizes as unilateral coercive measures.",
-      "event_type": "diplomatic criticism",
       "dimension": "Political Relations",
       "sub_dimension": "diplomatic",
       "actor_list": ["CHN", "USA"],
@@ -203,10 +189,8 @@ class EventAnalyzer:
             raw_response = self._call_openai(article_input)
             events = self._parse_response(raw_response, news_id, publication_date)
             
-            article_summary = events[0].get('article_summary', '') if events else ''
-            
             return {
-                'article_summary': article_summary,
+                'article_summary': '',
                 'events': events,
                 'raw_response': raw_response,
                 'error': None
@@ -316,12 +300,9 @@ class EventAnalyzer:
         return {
             'event_id': str(event_id),
             'news_id': news_id,
-            'article_summary': event.get('article_summary', '')[:500],
             'event_summary': event.get('event_summary', '')[:400],
             'event_date': event.get('event_date', default_date) or default_date,
-            'event_location': event.get('event_location', ''),
             'dimension': dimension,
-            'event_type': event.get('event_type', ''),
             'sub_dimension': event.get('sub_dimension', ''),
             'direction': direction,
             'sentiment': sentiment,

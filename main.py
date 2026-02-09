@@ -27,6 +27,8 @@ from src.data.database import init_db, get_statistics, set_db_path, set_database
 from src.data.scraper import NewsScraper
 from src.core.analyzer import EventAnalyzer
 from src.core.event_extractor import EventExtractor, BatchExtractor, ExtractionResult
+from src.utils.translator import get_translator
+from src.utils.intl_filter import passes_international_filter
 
 load_dotenv()
 
@@ -219,15 +221,65 @@ def main(
         logger.warning("No articles found.")
         return
     
-    # Process articles
-    logger.info(f"\n🔍 Extracting international events...")
+    # ── STEP 2: Translate articles to English ──
+    logger.info(f"\n🌐 Translating {len(articles)} articles to English...")
+    translator = get_translator()
+    translated_articles = []
+    
+    for i, article in enumerate(articles, 1):
+        title = article.get('headline', '')[:50]
+        logger.info(f"  [{i}/{len(articles)}] Translating: {title}...")
+        
+        tr = translator.translate(
+            text=article.get('article_text', ''),
+            title=article.get('headline', '')
+        )
+        
+        # Overwrite article text/title with English translation
+        article['article_text'] = tr['translated_text']
+        article['headline'] = tr['translated_title']
+        article['language_detected'] = tr['language_detected']
+        
+        if tr['was_translated']:
+            logger.info(f"    ✓ Translated from {tr['language_detected']}")
+        else:
+            logger.info(f"    - Already English (detected: {tr['language_detected']})")
+        
+        translated_articles.append(article)
+    
+    # ── STEP 3: Apply international-context filter ──
+    logger.info(f"\n🔎 Applying international-context filter...")
+    filtered_articles = []
+    discarded_count = 0
+    
+    for article in translated_articles:
+        passes, details = passes_international_filter(
+            text=article.get('article_text', ''),
+            title=article.get('headline', '')
+        )
+        if passes:
+            article['filter_countries'] = details['countries_found']
+            article['filter_keywords'] = details['keywords_found']
+            filtered_articles.append(article)
+        else:
+            discarded_count += 1
+            logger.debug(f"  ✗ Discarded: {article.get('headline', '')[:60]}")
+    
+    logger.info(f"  ✓ {len(filtered_articles)} articles passed, {discarded_count} discarded")
+    
+    if not filtered_articles:
+        logger.warning("No articles passed the international-context filter.")
+        return
+    
+    # ── STEP 4: Process (store + GPT classify) only filtered articles ──
+    logger.info(f"\n🔍 Extracting international events from {len(filtered_articles)} articles...")
     results = batch_processor.process_articles(
-        articles=articles,
+        articles=filtered_articles,
         progress_callback=progress_callback
     )
     
     # Print summaries
-    for i, (article, result) in enumerate(zip(articles, results)):
+    for i, (article, result) in enumerate(zip(filtered_articles, results)):
         title = article.get('headline', article.get('news_title', 'Unknown'))[:60]
         logger.info(f"\n[{i+1}] {title}")
         print_event_summary(result)

@@ -119,10 +119,31 @@ def _row_to_dict(row, cursor=None) -> Dict:
         return dict(row)
 
 
+def _run_migrations(conn) -> None:
+    """Run safe schema migrations for existing databases."""
+    cursor = conn.cursor()
+
+    # Migration 1: Add language_detected column to articles
+    try:
+        if _use_postgres():
+            cursor.execute("""
+                ALTER TABLE articles ADD COLUMN IF NOT EXISTS language_detected TEXT
+            """)
+        else:
+            # SQLite: check if column exists first
+            cursor.execute("PRAGMA table_info(articles)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "language_detected" not in columns:
+                cursor.execute("ALTER TABLE articles ADD COLUMN language_detected TEXT")
+                logger.info("Migration: Added language_detected column to articles")
+    except Exception as e:
+        logger.warning(f"Migration (language_detected): {e}")
+
+
 def init_db(reset: bool = False) -> None:
     """
     Initialize database with V2 schema.
-    
+
     Args:
         reset: If True, drops existing tables and recreates schema
     """
@@ -130,14 +151,15 @@ def init_db(reset: bool = False) -> None:
         try:
             if reset:
                 _drop_tables(conn)
-            
+
             _create_tables(conn)
+            _run_migrations(conn)
             _populate_taxonomy(conn)
             _populate_countries(conn)
-            
+
             conn.commit()
             logger.info(f"Database initialized successfully (reset={reset})")
-            
+
         except Exception as e:
             logger.error(f"Error initializing database: {e}")
             conn.rollback()
@@ -184,6 +206,7 @@ def _create_tables(conn) -> None:
                 source_domain TEXT,
                 source_country TEXT,
                 language TEXT DEFAULT 'en',
+                language_detected TEXT,
                 date_scraped TEXT
             )
         ''')
@@ -244,6 +267,7 @@ def _create_tables(conn) -> None:
                 source_domain TEXT,
                 source_country TEXT,
                 language TEXT DEFAULT 'en',
+                language_detected TEXT,
                 date_scraped TEXT
             )
         ''')
@@ -437,8 +461,8 @@ def insert_article(article_data: Dict[str, Any]) -> Optional[int]:
                     INSERT INTO articles (
                         news_title, news_text, article_summary,
                         publication_date, source_url, source_domain,
-                        source_country, language, date_scraped
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        source_country, language, language_detected, date_scraped
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING news_id
                 ''', (
                     news_title,
@@ -449,6 +473,7 @@ def insert_article(article_data: Dict[str, Any]) -> Optional[int]:
                     article_data.get('source_domain', ''),
                     article_data.get('source_country', ''),
                     article_data.get('language', 'en'),
+                    article_data.get('language_detected', ''),
                     datetime.utcnow().isoformat()
                 ))
                 row = cursor.fetchone()
@@ -464,8 +489,8 @@ def insert_article(article_data: Dict[str, Any]) -> Optional[int]:
                     INSERT INTO articles (
                         news_id, news_title, news_text, article_summary,
                         publication_date, source_url, source_domain,
-                        source_country, language, date_scraped
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        source_country, language, language_detected, date_scraped
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     news_id,
                     news_title,
@@ -476,6 +501,7 @@ def insert_article(article_data: Dict[str, Any]) -> Optional[int]:
                     article_data.get('source_domain', ''),
                     article_data.get('source_country', ''),
                     article_data.get('language', 'en'),
+                    article_data.get('language_detected', ''),
                     datetime.utcnow().isoformat()
                 ))
             
@@ -531,17 +557,15 @@ def insert_event(event_data: Dict[str, Any]) -> Optional[str]:
                 cursor.execute('''
                     INSERT INTO events (
                         event_id, news_id, event_summary, event_date,
-                        event_location, dimension, event_type, sub_dimension,
+                        dimension, sub_dimension,
                         direction, sentiment, confidence_level
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     event_data['event_id'],
                     event_data['news_id'],
                     event_data.get('event_summary', ''),
                     event_data.get('event_date', ''),
-                    event_data.get('event_location', ''),
                     event_data.get('dimension', ''),
-                    event_data.get('event_type', ''),
                     event_data.get('sub_dimension', ''),
                     event_data.get('direction', 'bilateral'),
                     event_data.get('sentiment', 0),
@@ -552,17 +576,15 @@ def insert_event(event_data: Dict[str, Any]) -> Optional[str]:
                 cursor.execute('''
                     INSERT INTO events (
                         event_id, news_id, event_summary, event_date,
-                        event_location, dimension, event_type, sub_dimension,
+                        dimension, sub_dimension,
                         direction, sentiment, confidence_level
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     event_data['event_id'],
                     event_data['news_id'],
                     event_data.get('event_summary', ''),
                     event_data.get('event_date', ''),
-                    event_data.get('event_location', ''),
                     event_data.get('dimension', ''),
-                    event_data.get('event_type', ''),
                     event_data.get('sub_dimension', ''),
                     event_data.get('direction', 'bilateral'),
                     event_data.get('sentiment', 0),

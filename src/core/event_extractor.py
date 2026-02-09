@@ -12,8 +12,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from src.core.analyzer import EventAnalyzer
 from src.data.database import (
     insert_article, insert_event, insert_event_actors,
-    update_article_summary, get_article_by_url,
-    get_valid_dimensions
+    get_article_by_url, get_valid_dimensions
 )
 from src.utils.country_mapper import get_mapper
 
@@ -27,9 +26,7 @@ class Event:
     news_id: int
     event_summary: str
     event_date: str = ""
-    event_location: str = ""
     dimension: str = "Other"
-    event_type: str = ""
     sub_dimension: str = ""
     direction: str = "bilateral"
     sentiment: float = 0.0
@@ -43,9 +40,7 @@ class Event:
             'news_id': self.news_id,
             'event_summary': self.event_summary,
             'event_date': self.event_date,
-            'event_location': self.event_location,
             'dimension': self.dimension,
-            'event_type': self.event_type,
             'sub_dimension': self.sub_dimension,
             'direction': self.direction,
             'sentiment': self.sentiment,
@@ -130,7 +125,8 @@ class EventExtractor:
             'source_url': url,
             'source_domain': article.get('source_domain', article.get('source', '')),
             'source_country': source_country,
-            'language': article.get('language', 'en')
+            'language': article.get('language', 'en'),
+            'language_detected': article.get('language_detected', '')
         }
         
         news_id = insert_article(article_data)
@@ -160,11 +156,7 @@ class EventExtractor:
         if analysis_result.get('error'):
             errors.append(analysis_result['error'])
         
-        article_summary = analysis_result.get('article_summary', '')
         raw_events = analysis_result.get('events', [])
-        
-        if article_summary:
-            update_article_summary(news_id, article_summary)
         
         # Process events
         events = []
@@ -189,7 +181,7 @@ class EventExtractor:
         
         return ExtractionResult(
             news_id=news_id,
-            article_summary=article_summary,
+            article_summary='',
             events=events,
             errors=errors,
             raw_response=analysis_result.get('raw_response')
@@ -228,9 +220,7 @@ class EventExtractor:
             news_id=news_id,
             event_summary=raw_event.get('event_summary', '')[:400],
             event_date=raw_event.get('event_date', ''),
-            event_location=raw_event.get('event_location', ''),
             dimension=dimension,
-            event_type=raw_event.get('event_type', ''),
             sub_dimension=raw_event.get('sub_dimension', ''),
             direction=direction,
             sentiment=sentiment,
