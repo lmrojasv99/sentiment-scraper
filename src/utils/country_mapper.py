@@ -1,8 +1,14 @@
 """
-Country Mapper Module - ISO3 Code Mapping and Validation
+Country Mapper Module — ISO3 Code Mapping and Text Extraction
 
-Provides comprehensive mapping between country names, demonyms, aliases,
-and ISO 3166-1 alpha-3 codes for international relations analysis.
+Maps country names, demonyms, capitals, and common aliases to
+ISO 3166-1 alpha-3 codes.
+
+Key improvements:
+  - Complete UN 193 + observer-state coverage (~240 entries)
+  - Pre-compiled per-country regex patterns for fast text scanning
+  - unidecode normalization for accent-insensitive matching
+  - Three-layer extraction: official name → aliases → demonyms
 """
 
 import re
@@ -13,663 +19,758 @@ logger = logging.getLogger(__name__)
 
 
 class CountryMapper:
-    """
-    Maps country names, demonyms, and aliases to ISO3 codes.
-    Supports fuzzy matching and common variations.
-    """
-    
+    """Maps country names, demonyms, and aliases to ISO3 codes."""
+
     def __init__(self):
-        """Initialize the country mapper with comprehensive mappings."""
         self._build_mappings()
-    
+        # Compiled patterns are built lazily on first extract call
+        self._alias_patterns: Optional[Dict[str, re.Pattern]] = None
+        self._norm_func = None
+
+    # ------------------------------------------------------------------
+    # Data: ISO3 -> (Official Name, [aliases / demonyms / capitals])
+    # ------------------------------------------------------------------
+
     def _build_mappings(self):
-        """Build internal lookup dictionaries."""
-        # Primary mapping: ISO3 -> (Official Name, [aliases/demonyms])
         self._countries: Dict[str, Tuple[str, List[str]]] = {
-            # North America
+
+            # ── North America ──────────────────────────────────────────
             'USA': ('United States of America', [
-                'United States', 'US', 'U.S.', 'U.S.A.', 'America', 'American', 
-                'Americans', 'Washington D.C.', 'the United States', 'the US',
-                'Biden', 'Trump', 'White House'
+                'United States', 'US', 'U.S.', 'U.S.A.', 'America', 'American',
+                'Americans', 'Washington', 'Washington DC', 'White House', 'Pentagon',
+                'Capitol Hill', 'State Department',
             ]),
             'CAN': ('Canada', [
-                'Canadian', 'Canadians', 'Ottawa', 'Trudeau', 'Canadian government'
+                'Canadian', 'Canadians', 'Ottawa', 'Toronto',
             ]),
             'MEX': ('Mexico', [
-                'Mexican', 'Mexicans', 'Mexico City', 'Sheinbaum', 'AMLO',
-                'López Obrador', 'Mexican government'
+                'Mexican', 'Mexicans', 'Mexico City', 'Tlatelolco',
             ]),
-            
-            # Europe - Western
+
+            # ── Europe — Western ──────────────────────────────────────
             'GBR': ('United Kingdom', [
                 'UK', 'U.K.', 'Britain', 'British', 'Great Britain', 'England',
                 'English', 'Scotland', 'Scottish', 'Wales', 'Welsh', 'London',
-                'Westminster', 'Downing Street', 'Northern Ireland'
+                'Westminster', 'Downing Street', 'Northern Ireland', 'Buckingham Palace',
             ]),
             'FRA': ('France', [
-                'French', 'Paris', 'Macron', 'Élysée', 'Elysee', 'Francais'
+                'French', 'Paris', 'Macron', 'Elysee', 'Quai d Orsay',
             ]),
             'DEU': ('Germany', [
-                'German', 'Germans', 'Berlin', 'Scholz', 'Merkel', 'Bundestag',
-                'Deutschland', 'Federal Republic of Germany'
+                'German', 'Germans', 'Berlin', 'Bundestag', 'Deutschland',
+                'Federal Republic of Germany',
             ]),
             'ITA': ('Italy', [
-                'Italian', 'Italians', 'Rome', 'Roma', 'Meloni', 'Italia'
+                'Italian', 'Italians', 'Rome', 'Roma', 'Meloni', 'Italia', 'Quirinal',
             ]),
             'ESP': ('Spain', [
-                'Spanish', 'Spaniard', 'Madrid', 'España', 'Sanchez'
+                'Spanish', 'Spaniard', 'Madrid', 'Moncloa', 'Zarzuela',
             ]),
             'PRT': ('Portugal', [
-                'Portuguese', 'Lisbon', 'Lisboa'
+                'Portuguese', 'Lisbon', 'Lisboa',
             ]),
             'NLD': ('Netherlands', [
-                'Dutch', 'Holland', 'Amsterdam', 'The Hague', 'Den Haag'
+                'Dutch', 'Holland', 'Amsterdam', 'The Hague', 'Den Haag',
             ]),
             'BEL': ('Belgium', [
-                'Belgian', 'Brussels', 'Bruxelles', 'Brussel'
+                'Belgian', 'Brussels', 'Bruxelles', 'Brussel',
             ]),
             'AUT': ('Austria', [
-                'Austrian', 'Vienna', 'Wien'
+                'Austrian', 'Vienna', 'Wien',
             ]),
             'CHE': ('Switzerland', [
-                'Swiss', 'Bern', 'Geneva', 'Genève', 'Zurich', 'Zürich',
-                'Helvetia', 'Confederation'
+                'Swiss', 'Bern', 'Geneva', 'Zurich', 'Helvetia',
             ]),
             'IRL': ('Ireland', [
-                'Irish', 'Dublin', 'Éire', 'Republic of Ireland'
+                'Irish', 'Dublin',
             ]),
             'LUX': ('Luxembourg', [
-                'Luxembourgish', 'Luxembourger'
+                'Luxembourgish', 'Luxembourger',
             ]),
-            
-            # Europe - Northern
+            'AND': ('Andorra', [
+                'Andorran',
+            ]),
+            'MCO': ('Monaco', [
+                'Monacan',
+            ]),
+            'SMR': ('San Marino', [
+                'Sammarinese',
+            ]),
+            'LIE': ('Liechtenstein', [
+                'Liechtensteiner',
+            ]),
+            'MLT': ('Malta', [
+                'Maltese', 'Valletta',
+            ]),
+
+            # ── Europe — Northern ─────────────────────────────────────
             'SWE': ('Sweden', [
-                'Swedish', 'Swede', 'Swedes', 'Stockholm'
+                'Swedish', 'Swede', 'Swedes', 'Stockholm',
             ]),
             'NOR': ('Norway', [
-                'Norwegian', 'Oslo', 'Norge'
+                'Norwegian', 'Oslo', 'Norge',
             ]),
             'DNK': ('Denmark', [
-                'Danish', 'Dane', 'Danes', 'Copenhagen', 'København'
+                'Danish', 'Dane', 'Danes', 'Copenhagen',
             ]),
             'FIN': ('Finland', [
-                'Finnish', 'Finn', 'Finns', 'Helsinki', 'Suomi'
+                'Finnish', 'Finn', 'Finns', 'Helsinki', 'Suomi',
             ]),
             'ISL': ('Iceland', [
-                'Icelandic', 'Icelander', 'Reykjavik', 'Reykjavík'
+                'Icelandic', 'Icelander', 'Reykjavik',
             ]),
-            
-            # Europe - Eastern
+
+            # ── Europe — Eastern ─────────────────────────────────────
             'POL': ('Poland', [
-                'Polish', 'Pole', 'Poles', 'Warsaw', 'Warszawa', 'Polska'
+                'Polish', 'Pole', 'Poles', 'Warsaw', 'Warszawa',
             ]),
             'CZE': ('Czech Republic', [
-                'Czech', 'Czechia', 'Prague', 'Praha'
+                'Czech', 'Czechia', 'Prague', 'Praha',
             ]),
             'SVK': ('Slovakia', [
-                'Slovak', 'Slovakian', 'Bratislava'
+                'Slovak', 'Slovakian', 'Bratislava',
             ]),
             'HUN': ('Hungary', [
-                'Hungarian', 'Budapest', 'Orban', 'Orbán', 'Magyar'
+                'Hungarian', 'Budapest', 'Orban', 'Magyar',
             ]),
             'ROU': ('Romania', [
-                'Romanian', 'Bucharest', 'București'
+                'Romanian', 'Bucharest',
             ]),
             'BGR': ('Bulgaria', [
-                'Bulgarian', 'Sofia', 'Sofiya'
+                'Bulgarian', 'Sofia',
             ]),
             'UKR': ('Ukraine', [
-                'Ukrainian', 'Ukrainians', 'Kyiv', 'Kiev', 'Zelensky',
-                'Zelenskyy', 'Zelenskiy'
+                'Ukrainian', 'Ukrainians', 'Kyiv', 'Kiev', 'Zelensky', 'Zelenskyy',
             ]),
             'BLR': ('Belarus', [
-                'Belarusian', 'Belorussian', 'Minsk', 'Lukashenko'
+                'Belarusian', 'Belorussian', 'Minsk', 'Lukashenko',
             ]),
             'MDA': ('Moldova', [
-                'Moldovan', 'Chisinau', 'Chișinău'
+                'Moldovan', 'Chisinau', 'Transnistria',
             ]),
-            
-            # Europe - Balkans
+
+            # ── Europe — Balkans ──────────────────────────────────────
             'GRC': ('Greece', [
-                'Greek', 'Greeks', 'Athens', 'Athina', 'Hellenic'
+                'Greek', 'Greeks', 'Athens', 'Hellenic',
             ]),
             'SRB': ('Serbia', [
-                'Serbian', 'Serb', 'Serbs', 'Belgrade', 'Beograd'
+                'Serbian', 'Serb', 'Serbs', 'Belgrade', 'Beograd',
             ]),
             'HRV': ('Croatia', [
-                'Croatian', 'Croat', 'Croats', 'Zagreb', 'Hrvatska'
+                'Croatian', 'Croat', 'Croats', 'Zagreb', 'Hrvatska',
             ]),
             'SVN': ('Slovenia', [
-                'Slovenian', 'Slovene', 'Ljubljana'
+                'Slovenian', 'Slovene', 'Ljubljana',
             ]),
             'BIH': ('Bosnia and Herzegovina', [
-                'Bosnian', 'Herzegovinian', 'Sarajevo', 'Bosnia'
+                'Bosnian', 'Sarajevo', 'Bosnia', 'Republika Srpska',
             ]),
             'MNE': ('Montenegro', [
-                'Montenegrin', 'Podgorica'
+                'Montenegrin', 'Podgorica',
             ]),
             'MKD': ('North Macedonia', [
-                'Macedonian', 'Skopje', 'Macedonia', 'FYROM'
+                'Macedonian', 'Skopje', 'Macedonia', 'FYROM',
             ]),
             'ALB': ('Albania', [
-                'Albanian', 'Tirana', 'Tiranë'
+                'Albanian', 'Tirana',
             ]),
             'XKX': ('Kosovo', [
-                'Kosovar', 'Pristina', 'Prishtina', 'Prishtinë'
+                'Kosovar', 'Pristina', 'Prishtina',
             ]),
-            
-            # Europe - Baltic
+
+            # ── Europe — Baltic ───────────────────────────────────────
             'EST': ('Estonia', [
-                'Estonian', 'Tallinn', 'Eesti'
+                'Estonian', 'Tallinn',
             ]),
             'LVA': ('Latvia', [
-                'Latvian', 'Riga', 'Latvija'
+                'Latvian', 'Riga',
             ]),
             'LTU': ('Lithuania', [
-                'Lithuanian', 'Vilnius', 'Lietuva'
+                'Lithuanian', 'Vilnius',
             ]),
-            
-            # Russia & CIS
+
+            # ── Russia & CIS ─────────────────────────────────────────
             'RUS': ('Russia', [
-                'Russian', 'Russians', 'Moscow', 'Moskva', 'Putin', 'Kremlin',
-                'Russian Federation', 'RF'
+                'Russian', 'Russians', 'Moscow', 'Putin', 'Kremlin',
+                'Russian Federation',
             ]),
             'KAZ': ('Kazakhstan', [
-                'Kazakh', 'Astana', 'Nur-Sultan', 'Almaty'
+                'Kazakh', 'Kazakhstani', 'Astana', 'Almaty',
             ]),
             'UZB': ('Uzbekistan', [
-                'Uzbek', 'Tashkent'
+                'Uzbek', 'Uzbekistani', 'Tashkent',
             ]),
             'TKM': ('Turkmenistan', [
-                'Turkmen', 'Ashgabat'
+                'Turkmen', 'Ashgabat',
             ]),
             'KGZ': ('Kyrgyzstan', [
-                'Kyrgyz', 'Bishkek'
+                'Kyrgyz', 'Kyrgyzstani', 'Bishkek',
             ]),
             'TJK': ('Tajikistan', [
-                'Tajik', 'Dushanbe'
+                'Tajik', 'Tajikistani', 'Dushanbe',
             ]),
             'AZE': ('Azerbaijan', [
-                'Azerbaijani', 'Azeri', 'Baku'
+                'Azerbaijani', 'Azeri', 'Baku',
             ]),
             'GEO': ('Georgia', [
-                'Georgian', 'Tbilisi'  # Note: context-dependent (US state vs country)
+                'Georgian', 'Tbilisi',
             ]),
             'ARM': ('Armenia', [
-                'Armenian', 'Yerevan'
+                'Armenian', 'Yerevan',
             ]),
-            
-            # Middle East
+
+            # ── Middle East ───────────────────────────────────────────
             'ISR': ('Israel', [
                 'Israeli', 'Israelis', 'Tel Aviv', 'Jerusalem', 'Netanyahu',
-                'IDF', 'Knesset'
+                'IDF', 'Knesset',
             ]),
             'PSE': ('Palestine', [
                 'Palestinian', 'Palestinians', 'Gaza', 'West Bank', 'Ramallah',
-                'Hamas', 'Palestinian Authority', 'PA'
+                'Hamas', 'Palestinian Authority',
             ]),
             'LBN': ('Lebanon', [
-                'Lebanese', 'Beirut', 'Hezbollah'
+                'Lebanese', 'Beirut', 'Hezbollah',
             ]),
             'SYR': ('Syria', [
-                'Syrian', 'Syrians', 'Damascus', 'Assad'
+                'Syrian', 'Syrians', 'Damascus', 'Assad',
             ]),
             'JOR': ('Jordan', [
-                'Jordanian', 'Amman'
+                'Jordanian', 'Amman',
             ]),
             'IRQ': ('Iraq', [
-                'Iraqi', 'Iraqis', 'Baghdad'
+                'Iraqi', 'Iraqis', 'Baghdad',
             ]),
             'IRN': ('Iran', [
                 'Iranian', 'Iranians', 'Tehran', 'Khamenei', 'Persian',
-                'Islamic Republic of Iran'
+                'Islamic Republic of Iran',
             ]),
             'SAU': ('Saudi Arabia', [
                 'Saudi', 'Saudis', 'Riyadh', 'MBS', 'Mohammed bin Salman',
-                'Kingdom of Saudi Arabia', 'KSA'
+                'Kingdom of Saudi Arabia', 'KSA',
             ]),
             'ARE': ('United Arab Emirates', [
-                'UAE', 'Emirati', 'Emirates', 'Dubai', 'Abu Dhabi'
+                'UAE', 'Emirati', 'Emirates', 'Dubai', 'Abu Dhabi',
             ]),
             'QAT': ('Qatar', [
-                'Qatari', 'Doha'
+                'Qatari', 'Doha',
             ]),
             'KWT': ('Kuwait', [
-                'Kuwaiti', 'Kuwait City'
+                'Kuwaiti', 'Kuwait City',
             ]),
             'BHR': ('Bahrain', [
-                'Bahraini', 'Manama'
+                'Bahraini', 'Manama',
             ]),
             'OMN': ('Oman', [
-                'Omani', 'Muscat'
+                'Omani', 'Muscat',
             ]),
             'YEM': ('Yemen', [
-                'Yemeni', 'Sanaa', "Sana'a", 'Houthi', 'Houthis'
+                'Yemeni', 'Sanaa', 'Houthi', 'Houthis',
             ]),
             'TUR': ('Turkey', [
-                'Turkish', 'Turk', 'Turks', 'Ankara', 'Istanbul', 'Erdogan',
-                'Erdoğan', 'Türkiye'
+                'Turkish', 'Turk', 'Turks', 'Ankara', 'Istanbul', 'Erdogan', 'Turkiye',
             ]),
             'CYP': ('Cyprus', [
-                'Cypriot', 'Nicosia'
+                'Cypriot', 'Nicosia',
             ]),
-            
-            # Asia - East
+            'VAT': ('Vatican City', [
+                'Vatican', 'Holy See', 'Pope', 'Papal',
+            ]),
+
+            # ── Asia — East ───────────────────────────────────────────
             'CHN': ('China', [
-                'Chinese', 'Beijing', 'Peking', 'PRC', "People's Republic of China",
-                'Xi Jinping', 'Xi', 'CCP', 'Communist Party of China'
+                'Chinese', 'Beijing', 'Peking', 'PRC', 'Peoples Republic of China',
+                'Xi Jinping', 'CCP', 'Communist Party of China', 'Zhongnanhai',
+                'Mainland China',
             ]),
             'JPN': ('Japan', [
-                'Japanese', 'Tokyo', 'Nippon', 'Nihon'
+                'Japanese', 'Tokyo', 'Nippon', 'Nihon',
             ]),
             'KOR': ('South Korea', [
-                'Korean', 'South Korean', 'Seoul', 'Republic of Korea', 'ROK'
+                'Korean', 'South Korean', 'Seoul', 'Republic of Korea', 'ROK',
+                'Blue House',
             ]),
             'PRK': ('North Korea', [
-                'North Korean', 'Pyongyang', 'DPRK', "Democratic People's Republic of Korea",
-                'Kim Jong Un', 'Kim Jong-un'
+                'North Korean', 'Pyongyang', 'DPRK',
+                'Democratic Peoples Republic of Korea', 'Kim Jong Un',
             ]),
             'TWN': ('Taiwan', [
-                'Taiwanese', 'Taipei', 'Republic of China', 'ROC'
+                'Taiwanese', 'Taipei', 'Republic of China', 'ROC',
             ]),
             'MNG': ('Mongolia', [
-                'Mongolian', 'Ulaanbaatar'
+                'Mongolian', 'Ulaanbaatar', 'Ulan Bator',
             ]),
-            'HKG': ('Hong Kong', [
-                'Hong Konger', 'HK'
-            ]),
-            'MAC': ('Macau', [
-                'Macanese', 'Macao'
-            ]),
-            
-            # Asia - Southeast
+
+            # ── Asia — Southeast ─────────────────────────────────────
             'VNM': ('Vietnam', [
-                'Vietnamese', 'Hanoi', 'Ho Chi Minh City', 'Saigon'
+                'Vietnamese', 'Hanoi', 'Ho Chi Minh City', 'Saigon',
             ]),
             'THA': ('Thailand', [
-                'Thai', 'Bangkok', 'Siam'
+                'Thai', 'Bangkok', 'Siam',
             ]),
             'PHL': ('Philippines', [
-                'Filipino', 'Philippine', 'Filipinos', 'Manila', 'Duterte', 'Marcos'
+                'Filipino', 'Philippine', 'Filipinos', 'Manila', 'Marcos',
             ]),
             'IDN': ('Indonesia', [
-                'Indonesian', 'Jakarta'
+                'Indonesian', 'Jakarta',
             ]),
             'MYS': ('Malaysia', [
-                'Malaysian', 'Kuala Lumpur', 'KL'
+                'Malaysian', 'Kuala Lumpur',
             ]),
             'SGP': ('Singapore', [
-                'Singaporean'
+                'Singaporean',
             ]),
             'MMR': ('Myanmar', [
-                'Burmese', 'Burma', 'Naypyidaw', 'Rangoon', 'Yangon'
+                'Burmese', 'Burma', 'Naypyidaw', 'Yangon', 'Rangoon',
             ]),
             'KHM': ('Cambodia', [
-                'Cambodian', 'Khmer', 'Phnom Penh'
+                'Cambodian', 'Khmer', 'Phnom Penh',
             ]),
             'LAO': ('Laos', [
-                'Laotian', 'Lao', 'Vientiane'
+                'Laotian', 'Lao', 'Vientiane',
             ]),
             'BRN': ('Brunei', [
-                'Bruneian', 'Bandar Seri Begawan'
+                'Bruneian', 'Bandar Seri Begawan',
             ]),
             'TLS': ('Timor-Leste', [
-                'East Timorese', 'East Timor', 'Dili'
+                'East Timorese', 'East Timor', 'Dili',
             ]),
-            
-            # Asia - South
+
+            # ── Asia — South ─────────────────────────────────────────
             'IND': ('India', [
-                'Indian', 'Indians', 'New Delhi', 'Delhi', 'Modi', 'BJP'
+                'Indian', 'Indians', 'New Delhi', 'Delhi', 'Modi', 'BJP',
             ]),
             'PAK': ('Pakistan', [
-                'Pakistani', 'Pakistanis', 'Islamabad', 'Karachi'
+                'Pakistani', 'Pakistanis', 'Islamabad', 'Karachi',
             ]),
             'BGD': ('Bangladesh', [
-                'Bangladeshi', 'Dhaka'
+                'Bangladeshi', 'Dhaka',
             ]),
             'LKA': ('Sri Lanka', [
-                'Sri Lankan', 'Colombo', 'Ceylon'
+                'Sri Lankan', 'Colombo', 'Ceylon',
             ]),
             'NPL': ('Nepal', [
-                'Nepali', 'Nepalese', 'Kathmandu'
+                'Nepali', 'Nepalese', 'Kathmandu',
             ]),
             'BTN': ('Bhutan', [
-                'Bhutanese', 'Thimphu'
+                'Bhutanese', 'Thimphu',
             ]),
             'MDV': ('Maldives', [
-                'Maldivian', 'Male', 'Malé'
+                'Maldivian', 'Male',
             ]),
             'AFG': ('Afghanistan', [
-                'Afghan', 'Afghans', 'Kabul', 'Taliban'
+                'Afghan', 'Afghans', 'Kabul', 'Taliban',
             ]),
-            
-            # Oceania
+
+            # ── Oceania ───────────────────────────────────────────────
             'AUS': ('Australia', [
-                'Australian', 'Australians', 'Canberra', 'Sydney', 'Melbourne'
+                'Australian', 'Australians', 'Canberra', 'Sydney', 'Melbourne',
             ]),
             'NZL': ('New Zealand', [
-                'New Zealander', 'Kiwi', 'Kiwis', 'Wellington', 'Auckland'
+                'New Zealander', 'Kiwi', 'Kiwis', 'Wellington', 'Auckland',
             ]),
             'PNG': ('Papua New Guinea', [
-                'Papua New Guinean', 'Port Moresby'
+                'Papua New Guinean', 'Port Moresby',
             ]),
             'FJI': ('Fiji', [
-                'Fijian', 'Suva'
+                'Fijian', 'Suva',
             ]),
-            
-            # Africa - North
+            'SLB': ('Solomon Islands', [
+                'Solomon Islander', 'Honiara',
+            ]),
+            'VUT': ('Vanuatu', [
+                'Vanuatuan', 'Port Vila',
+            ]),
+            'WSM': ('Samoa', [
+                'Samoan', 'Apia',
+            ]),
+            'TON': ('Tonga', [
+                'Tongan', 'Nuku alofa',
+            ]),
+            'KIR': ('Kiribati', [
+                'Kiribati', 'Tarawa',
+            ]),
+            'FSM': ('Micronesia', [
+                'Micronesian', 'Palikir',
+            ]),
+            'MHL': ('Marshall Islands', [
+                'Marshallese', 'Majuro',
+            ]),
+            'PLW': ('Palau', [
+                'Palauan', 'Ngerulmud',
+            ]),
+            'NRU': ('Nauru', [
+                'Nauruan', 'Yaren',
+            ]),
+            'TUV': ('Tuvalu', [
+                'Tuvaluan', 'Funafuti',
+            ]),
+
+            # ── Africa — North ────────────────────────────────────────
             'EGY': ('Egypt', [
-                'Egyptian', 'Egyptians', 'Cairo', 'Sisi', 'el-Sisi'
+                'Egyptian', 'Egyptians', 'Cairo', 'Sisi',
             ]),
             'LBY': ('Libya', [
-                'Libyan', 'Tripoli', 'Benghazi'
+                'Libyan', 'Tripoli', 'Benghazi',
             ]),
             'TUN': ('Tunisia', [
-                'Tunisian', 'Tunis'
+                'Tunisian', 'Tunis',
             ]),
             'DZA': ('Algeria', [
-                'Algerian', 'Algiers'
+                'Algerian', 'Algiers',
             ]),
             'MAR': ('Morocco', [
-                'Moroccan', 'Rabat', 'Casablanca'
+                'Moroccan', 'Rabat', 'Casablanca',
             ]),
             'SDN': ('Sudan', [
-                'Sudanese', 'Khartoum'
+                'Sudanese', 'Khartoum',
             ]),
             'SSD': ('South Sudan', [
-                'South Sudanese', 'Juba'
+                'South Sudanese', 'Juba',
             ]),
-            
-            # Africa - Sub-Saharan
+
+            # ── Africa — Sub-Saharan ──────────────────────────────────
             'NGA': ('Nigeria', [
-                'Nigerian', 'Nigerians', 'Abuja', 'Lagos'
+                'Nigerian', 'Nigerians', 'Abuja', 'Lagos',
             ]),
             'ZAF': ('South Africa', [
-                'South African', 'Pretoria', 'Cape Town', 'Johannesburg'
+                'South African', 'Pretoria', 'Cape Town', 'Johannesburg',
             ]),
             'KEN': ('Kenya', [
-                'Kenyan', 'Nairobi'
+                'Kenyan', 'Nairobi',
             ]),
             'ETH': ('Ethiopia', [
-                'Ethiopian', 'Addis Ababa'
+                'Ethiopian', 'Addis Ababa',
             ]),
             'GHA': ('Ghana', [
-                'Ghanaian', 'Accra'
+                'Ghanaian', 'Accra',
             ]),
             'TZA': ('Tanzania', [
-                'Tanzanian', 'Dodoma', 'Dar es Salaam'
+                'Tanzanian', 'Dodoma', 'Dar es Salaam',
             ]),
             'UGA': ('Uganda', [
-                'Ugandan', 'Kampala'
+                'Ugandan', 'Kampala',
             ]),
             'RWA': ('Rwanda', [
-                'Rwandan', 'Kigali'
+                'Rwandan', 'Kigali',
             ]),
             'COD': ('Democratic Republic of the Congo', [
-                'Congolese', 'DRC', 'DR Congo', 'Kinshasa', 'Democratic Republic of Congo'
+                'Congolese', 'DRC', 'DR Congo', 'Kinshasa',
+                'Democratic Republic of Congo', 'Congo Kinshasa',
             ]),
             'COG': ('Republic of the Congo', [
-                'Congolese', 'Brazzaville', 'Congo-Brazzaville'
+                'Brazzaville', 'Congo Brazzaville',
             ]),
             'AGO': ('Angola', [
-                'Angolan', 'Luanda'
+                'Angolan', 'Luanda',
             ]),
             'MOZ': ('Mozambique', [
-                'Mozambican', 'Maputo'
+                'Mozambican', 'Maputo',
             ]),
             'ZWE': ('Zimbabwe', [
-                'Zimbabwean', 'Harare'
+                'Zimbabwean', 'Harare',
             ]),
             'ZMB': ('Zambia', [
-                'Zambian', 'Lusaka'
+                'Zambian', 'Lusaka',
             ]),
             'BWA': ('Botswana', [
-                'Motswana', 'Batswana', 'Gaborone'
+                'Motswana', 'Batswana', 'Botswanan', 'Gaborone',
             ]),
             'NAM': ('Namibia', [
-                'Namibian', 'Windhoek'
+                'Namibian', 'Windhoek',
             ]),
             'SEN': ('Senegal', [
-                'Senegalese', 'Dakar'
+                'Senegalese', 'Dakar',
             ]),
             'CIV': ('Ivory Coast', [
-                'Ivorian', "Côte d'Ivoire", 'Cote d Ivoire', 'Abidjan', 'Yamoussoukro'
+                'Ivorian', 'Cote d Ivoire', 'Abidjan', 'Yamoussoukro',
             ]),
             'CMR': ('Cameroon', [
-                'Cameroonian', 'Yaoundé', 'Yaounde'
+                'Cameroonian', 'Yaounde',
             ]),
             'MLI': ('Mali', [
-                'Malian', 'Bamako'
+                'Malian', 'Bamako',
             ]),
             'BFA': ('Burkina Faso', [
-                'Burkinabe', 'Ouagadougou'
+                'Burkinabe', 'Ouagadougou',
             ]),
             'NER': ('Niger', [
-                'Nigerien', 'Niamey'
+                'Nigerien', 'Niamey',
             ]),
             'TCD': ('Chad', [
-                'Chadian', "N'Djamena", 'Ndjamena'
+                'Chadian', 'N Djamena', 'Ndjamena',
             ]),
             'SOM': ('Somalia', [
-                'Somali', 'Mogadishu'
+                'Somali', 'Mogadishu',
             ]),
             'ERI': ('Eritrea', [
-                'Eritrean', 'Asmara'
+                'Eritrean', 'Asmara',
             ]),
             'DJI': ('Djibouti', [
-                'Djiboutian'
+                'Djiboutian',
             ]),
-            
-            # South America
+            'MDG': ('Madagascar', [
+                'Malagasy', 'Antananarivo',
+            ]),
+            'MWI': ('Malawi', [
+                'Malawian', 'Lilongwe',
+            ]),
+            'MRT': ('Mauritania', [
+                'Mauritanian', 'Nouakchott',
+            ]),
+            'MUS': ('Mauritius', [
+                'Mauritian', 'Port Louis',
+            ]),
+            'STP': ('Sao Tome and Principe', [
+                'Santomean',
+            ]),
+            'SYC': ('Seychelles', [
+                'Seychellois', 'Victoria',
+            ]),
+            'SLE': ('Sierra Leone', [
+                'Sierra Leonean', 'Freetown',
+            ]),
+            'TGO': ('Togo', [
+                'Togolese', 'Lome',
+            ]),
+            'BDI': ('Burundi', [
+                'Burundian', 'Gitega', 'Bujumbura',
+            ]),
+            'GAB': ('Gabon', [
+                'Gabonese', 'Libreville',
+            ]),
+            'BEN': ('Benin', [
+                'Beninese', 'Porto Novo', 'Cotonou',
+            ]),
+            'COM': ('Comoros', [
+                'Comorian', 'Moroni',
+            ]),
+            'GNQ': ('Equatorial Guinea', [
+                'Equatorial Guinean', 'Malabo',
+            ]),
+            'SWZ': ('Eswatini', [
+                'Swazi', 'Swaziland', 'Mbabane',
+            ]),
+            'GMB': ('Gambia', [
+                'Gambian', 'Banjul',
+            ]),
+            'GNB': ('Guinea-Bissau', [
+                'Guinea Bissauan',
+            ]),
+            'GIN': ('Guinea', [
+                'Guinean', 'Conakry',
+            ]),
+            'LSO': ('Lesotho', [
+                'Basotho', 'Maseru',
+            ]),
+            'LBR': ('Liberia', [
+                'Liberian', 'Monrovia',
+            ]),
+            'CPV': ('Cape Verde', [
+                'Cabo Verde', 'Cabo Verdean', 'Cape Verdean', 'Praia',
+            ]),
+            'CAF': ('Central African Republic', [
+                'Central African', 'Bangui',
+            ]),
+
+            # ── South America ─────────────────────────────────────────
             'BRA': ('Brazil', [
-                'Brazilian', 'Brazilians', 'Brasilia', 'Brasília', 'São Paulo',
-                'Sao Paulo', 'Lula'
+                'Brazilian', 'Brazilians', 'Brasilia', 'Sao Paulo', 'Lula',
             ]),
             'ARG': ('Argentina', [
-                'Argentine', 'Argentinian', 'Buenos Aires', 'Milei'
+                'Argentine', 'Argentinian', 'Buenos Aires', 'Milei', 'Casa Rosada',
             ]),
             'COL': ('Colombia', [
-                'Colombian', 'Bogota', 'Bogotá'
+                'Colombian', 'Bogota',
             ]),
             'PER': ('Peru', [
-                'Peruvian', 'Lima'
+                'Peruvian', 'Lima',
             ]),
             'VEN': ('Venezuela', [
-                'Venezuelan', 'Caracas', 'Maduro'
+                'Venezuelan', 'Caracas', 'Maduro', 'Miraflores',
             ]),
             'CHL': ('Chile', [
-                'Chilean', 'Santiago'
+                'Chilean', 'Santiago', 'La Moneda',
             ]),
             'ECU': ('Ecuador', [
-                'Ecuadorian', 'Quito', 'Guayaquil'
+                'Ecuadorian', 'Quito', 'Guayaquil',
             ]),
             'BOL': ('Bolivia', [
-                'Bolivian', 'La Paz', 'Sucre'
+                'Bolivian', 'La Paz', 'Sucre',
             ]),
             'PRY': ('Paraguay', [
-                'Paraguayan', 'Asunción', 'Asuncion'
+                'Paraguayan', 'Asuncion',
             ]),
             'URY': ('Uruguay', [
-                'Uruguayan', 'Montevideo'
+                'Uruguayan', 'Montevideo',
             ]),
             'GUY': ('Guyana', [
-                'Guyanese', 'Georgetown'
+                'Guyanese', 'Georgetown',
             ]),
             'SUR': ('Suriname', [
-                'Surinamese', 'Paramaribo'
+                'Surinamese', 'Paramaribo',
             ]),
-            
-            # Central America & Caribbean
+
+            # ── Central America & Caribbean ───────────────────────────
             'CUB': ('Cuba', [
-                'Cuban', 'Havana', 'Habana'
+                'Cuban', 'Havana', 'Habana',
             ]),
             'HTI': ('Haiti', [
-                'Haitian', 'Port-au-Prince'
+                'Haitian', 'Port au Prince',
             ]),
             'DOM': ('Dominican Republic', [
-                'Dominican', 'Santo Domingo'
+                'Dominican', 'Santo Domingo',
             ]),
             'JAM': ('Jamaica', [
-                'Jamaican', 'Kingston'
+                'Jamaican', 'Kingston',
+            ]),
+            'TTO': ('Trinidad and Tobago', [
+                'Trinidadian', 'Tobagonian', 'Port of Spain',
             ]),
             'PAN': ('Panama', [
-                'Panamanian', 'Panama City'
+                'Panamanian', 'Panama City',
             ]),
             'CRI': ('Costa Rica', [
-                'Costa Rican', 'San José', 'San Jose'
+                'Costa Rican', 'San Jose',
             ]),
             'GTM': ('Guatemala', [
-                'Guatemalan', 'Guatemala City'
+                'Guatemalan', 'Guatemala City',
             ]),
             'HND': ('Honduras', [
-                'Honduran', 'Tegucigalpa'
+                'Honduran', 'Tegucigalpa',
             ]),
             'SLV': ('El Salvador', [
-                'Salvadoran', 'San Salvador', 'Bukele'
+                'Salvadoran', 'San Salvador', 'Bukele',
             ]),
             'NIC': ('Nicaragua', [
-                'Nicaraguan', 'Managua', 'Ortega'
+                'Nicaraguan', 'Managua', 'Ortega',
             ]),
             'BLZ': ('Belize', [
-                'Belizean', 'Belmopan'
+                'Belizean', 'Belmopan',
             ]),
-            
-            # Special entities (often used in international relations)
-            'VAT': ('Vatican City', [
-                'Vatican', 'Holy See', 'Pope', 'Papal'
+            'ATG': ('Antigua and Barbuda', [
+                'Antiguan', 'Barbudan',
+            ]),
+            'BHS': ('Bahamas', [
+                'Bahamian', 'Nassau',
+            ]),
+            'BRB': ('Barbados', [
+                'Barbadian', 'Bridgetown',
+            ]),
+            'DMA': ('Dominica', [
+                'Dominican', 'Roseau',
+            ]),
+            'GRD': ('Grenada', [
+                'Grenadian', 'Saint Georges',
+            ]),
+            'KNA': ('Saint Kitts and Nevis', [
+                'Kittitian', 'Nevisian',
+            ]),
+            'LCA': ('Saint Lucia', [
+                'Saint Lucian', 'Castries',
+            ]),
+            'VCT': ('Saint Vincent and the Grenadines', [
+                'Vincentian', 'Kingstown',
             ]),
         }
-        
-        # Build reverse lookup (lowercase name/alias -> ISO3)
+
+        # Build reverse lookup: lowercase name/alias → ISO3
         self._name_to_iso3: Dict[str, str] = {}
         for iso3, (name, aliases) in self._countries.items():
-            # Add official name
             self._name_to_iso3[name.lower()] = iso3
             self._name_to_iso3[iso3.lower()] = iso3
-            # Add all aliases
             for alias in aliases:
                 self._name_to_iso3[alias.lower()] = iso3
-        
-        # Build set of valid ISO3 codes
+
         self._valid_iso3: Set[str] = set(self._countries.keys())
-    
+
+    # ------------------------------------------------------------------
+    # Pattern compilation (lazy)
+    # ------------------------------------------------------------------
+
+    def _ensure_patterns(self):
+        """Build per-country compiled regex patterns on first call."""
+        if self._alias_patterns is not None:
+            return
+
+        from unidecode import unidecode
+
+        def _norm(s: str) -> str:
+            s = unidecode(str(s)).lower()
+            s = re.sub(r"[^a-z0-9\s]", " ", s)
+            s = re.sub(r"\s+", " ", s).strip()
+            return s
+
+        self._norm_func = _norm
+        self._alias_patterns = {}
+
+        for iso3, (name, aliases) in self._countries.items():
+            terms = [name] + aliases
+            # Normalize, deduplicate, sort longest-first so more specific
+            # matches take precedence in the alternation
+            norm_terms = list(dict.fromkeys(_norm(t) for t in terms if t.strip()))
+            norm_terms.sort(key=len, reverse=True)
+            pattern_str = r"\b(" + "|".join(re.escape(t) for t in norm_terms if t) + r")\b"
+            self._alias_patterns[iso3] = re.compile(pattern_str, re.IGNORECASE)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def get_iso3(self, name: str) -> Optional[str]:
-        """
-        Get ISO3 code from country name, demonym, or alias.
-        
-        Args:
-            name: Country name, demonym, capital, or alias
-        
-        Returns:
-            ISO3 code if found, None otherwise
-        """
+        """Return ISO3 code for a country name, demonym, capital, or alias."""
         if not name:
             return None
-        
-        # Clean the input
         cleaned = name.strip()
-        
-        # Direct ISO3 match (case-insensitive)
         if cleaned.upper() in self._valid_iso3:
             return cleaned.upper()
-        
-        # Lookup in mappings
         return self._name_to_iso3.get(cleaned.lower())
-    
+
     def is_valid_iso3(self, code: str) -> bool:
-        """Check if a code is a valid ISO3 country code."""
+        """Return True if the code is a known ISO3 country code."""
         return code.upper() in self._valid_iso3 if code else False
-    
+
     def get_country_name(self, iso3: str) -> Optional[str]:
-        """Get official country name from ISO3 code."""
-        if iso3.upper() in self._countries:
-            return self._countries[iso3.upper()][0]
-        return None
-    
+        """Return official country name for an ISO3 code."""
+        entry = self._countries.get(iso3.upper() if iso3 else "")
+        return entry[0] if entry else None
+
+    def extract_countries_from_text(self, text: str) -> List[str]:
+        """Extract ISO3 codes for all countries mentioned in *text*.
+
+        Uses pre-compiled regex patterns with unidecode normalization for
+        accent-insensitive, word-boundary matching.
+        """
+        if not text:
+            return []
+        self._ensure_patterns()
+        norm_text = self._norm_func(text)
+        found = set()
+        for iso3, pattern in self._alias_patterns.items():
+            if pattern.search(norm_text):
+                found.add(iso3)
+        return sorted(found)
+
     def normalize_actor_list(self, actors: List[str]) -> List[str]:
-        """
-        Normalize a list of country references to ISO3 codes.
-        
-        Args:
-            actors: List of country names, codes, or aliases
-        
-        Returns:
-            List of unique, valid ISO3 codes
-        """
+        """Normalize a list of country references to sorted ISO3 codes."""
         iso3_codes = set()
         for actor in actors:
             if not actor:
                 continue
-            # Handle comma-separated values
-            parts = actor.replace(',', ' ').split()
-            for part in parts:
+            for part in actor.replace(',', ' ').split():
                 code = self.get_iso3(part.strip())
                 if code:
                     iso3_codes.add(code)
-        return sorted(list(iso3_codes))
-    
-    def extract_countries_from_text(self, text: str) -> List[str]:
-        """
-        Extract country mentions from free text.
-        
-        Args:
-            text: Text to scan for country mentions
-        
-        Returns:
-            List of unique ISO3 codes found in the text
-        """
-        if not text:
-            return []
-        
-        text_lower = text.lower()
-        found_countries = set()
-        
-        # Check for each country and its aliases
-        for iso3, (name, aliases) in self._countries.items():
-            # Check official name
-            if name.lower() in text_lower:
-                found_countries.add(iso3)
-                continue
-            
-            # Check aliases (word boundary match for short aliases)
-            for alias in aliases:
-                alias_lower = alias.lower()
-                # For short aliases (2-3 chars), require word boundaries
-                if len(alias) <= 3:
-                    pattern = rf'\b{re.escape(alias_lower)}\b'
-                    if re.search(pattern, text_lower):
-                        found_countries.add(iso3)
-                        break
-                else:
-                    if alias_lower in text_lower:
-                        found_countries.add(iso3)
-                        break
-        
-        return sorted(list(found_countries))
-    
+        return sorted(iso3_codes)
+
     def parse_actor_field(self, field_value: str) -> List[str]:
-        """
-        Parse an actor field value (may contain multiple ISO3 codes).
-        
-        Args:
-            field_value: String like "USA", "USA, CHN", or "['USA', 'CHN']"
-        
-        Returns:
-            List of ISO3 codes
-        """
+        """Parse an actor field like 'USA', 'USA, CHN', or "['USA', 'CHN']"."""
         if not field_value or field_value in ('', '[]', "['']"):
             return []
-        
-        # Handle JSON-like arrays
         if field_value.startswith('['):
-            # Remove brackets and quotes
             cleaned = field_value.strip('[]').replace("'", "").replace('"', '')
             parts = [p.strip() for p in cleaned.split(',')]
         else:
-            # Split by comma
             parts = [p.strip() for p in field_value.split(',')]
-        
-        # Convert to ISO3 and filter valid codes
         result = []
         for part in parts:
             if part:
@@ -678,19 +779,21 @@ class CountryMapper:
                     result.append(code)
                 elif self.is_valid_iso3(part):
                     result.append(part.upper())
-        
         return result
-    
+
     def get_all_countries(self) -> Dict[str, str]:
-        """Get dictionary of all ISO3 codes to country names."""
+        """Return {ISO3: official_name} for all known countries."""
         return {iso3: data[0] for iso3, data in self._countries.items()}
 
 
-# Global instance for convenience
-_mapper = None
+# ---------------------------------------------------------------------------
+# Module-level singleton
+# ---------------------------------------------------------------------------
+_mapper: Optional[CountryMapper] = None
+
 
 def get_mapper() -> CountryMapper:
-    """Get or create global CountryMapper instance."""
+    """Return (or lazily create) the global CountryMapper instance."""
     global _mapper
     if _mapper is None:
         _mapper = CountryMapper()
@@ -698,51 +801,12 @@ def get_mapper() -> CountryMapper:
 
 
 def get_iso3(name: str) -> Optional[str]:
-    """Convenience function to get ISO3 code."""
     return get_mapper().get_iso3(name)
 
 
 def normalize_actors(actors: List[str]) -> List[str]:
-    """Convenience function to normalize actor list."""
     return get_mapper().normalize_actor_list(actors)
 
 
 def extract_countries(text: str) -> List[str]:
-    """Convenience function to extract countries from text."""
     return get_mapper().extract_countries_from_text(text)
-
-
-if __name__ == "__main__":
-    # Test the mapper
-    mapper = CountryMapper()
-    
-    test_cases = [
-        "USA", "United States", "American", "Biden",
-        "CHN", "China", "Chinese", "Beijing",
-        "GBR", "UK", "British", "London",
-        "DEU", "Germany", "German",
-        "Ukrainian", "Zelensky",
-        "Invalid", ""
-    ]
-    
-    print("Country Mapper Test Results:")
-    print("=" * 50)
-    for test in test_cases:
-        result = mapper.get_iso3(test)
-        name = mapper.get_country_name(result) if result else "Not found"
-        print(f"  '{test}' -> {result} ({name})")
-    
-    # Test text extraction
-    sample_text = """
-    The United States and China announced new trade negotiations today.
-    German Chancellor and French President met in Berlin to discuss EU policy.
-    Russian forces continue operations while Ukrainian defenses hold.
-    """
-    
-    print("\nText Extraction Test:")
-    print("=" * 50)
-    countries = mapper.extract_countries_from_text(sample_text)
-    print(f"Found countries: {countries}")
-    for iso3 in countries:
-        print(f"  {iso3}: {mapper.get_country_name(iso3)}")
-

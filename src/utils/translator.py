@@ -1,93 +1,88 @@
 """Translation Module — MarianMT via Hugging Face Transformers.
 
-Detects the source language of article text, chunks it into
-sentence-aware segments (≤500 chars), and translates to English
-using Helsinki-NLP MarianMT opus-mt-{src}-en models.
+Detects the source language of article text, splits it into
+sentence-aware chunks (≤512 chars), and translates to English using
+Helsinki-NLP MarianMT models with direct tokenizer + model batching.
 
-Caches one pipeline per source language for reuse across articles.
+Key improvements over the pipeline-based approach:
+  - Batch tokenization with padding for faster multi-chunk articles
+  - GPU / MPS / CPU auto-selection
+  - Correct model IDs for 90+ languages (patched known 404 paths)
+  - Models cached per language code for reuse across articles
 """
 
+import gc
 import logging
+import re
 from typing import Optional, Tuple
 
-import spacy
+import torch
 from langdetect import detect, LangDetectException
-from transformers import pipeline as hf_pipeline
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 logger = logging.getLogger(__name__)
 
-# Maximum characters per chunk for MarianMT input
-MAX_CHUNK_CHARS = 500
+# Sentences are grouped into chunks of at most this many characters
+MAX_CHUNK_CHARS = 512
 
-# Languages supported by Helsinki-NLP opus-mt-{src}-en models.
-# Key = langdetect code, Value = MarianMT model suffix.
-# Extend this dict as needed.
-SUPPORTED_LANGUAGES = {
-    "es": "es",   # Spanish
-    "fr": "fr",   # French
-    "de": "de",   # German
-    "pt": "pt",   # Portuguese
-    "it": "it",   # Italian
-    "nl": "nl",   # Dutch
-    "ru": "ru",   # Russian
-    "ar": "ar",   # Arabic
-    "zh-cn": "zh",  # Chinese (simplified)
-    "zh-tw": "zh",  # Chinese (traditional)
-    "ja": "jap",    # Japanese
-    "ko": "ko",    # Korean
-    "tr": "tr",    # Turkish
-    "pl": "pl",    # Polish
-    "uk": "uk",    # Ukrainian
-    "vi": "vi",    # Vietnamese
-    "sv": "sv",    # Swedish
-    "da": "da",    # Danish
-    "no": "no",    # Norwegian
-    "fi": "fi",    # Finnish
-    "ro": "ro",    # Romanian
-    "cs": "cs",    # Czech
-    "hu": "hu",    # Hungarian
-    "bg": "bg",    # Bulgarian
-    "hr": "hr",    # Croatian (use OPUS-MT tc-big model or sla)
-    "hi": "hi",    # Hindi
-    "bn": "bn",    # Bengali
-    "th": "th",    # Thai
-    "id": "id",    # Indonesian
-    "ms": "ms",    # Malay
-    "tl": "tl",    # Tagalog/Filipino
-    "sw": "swc",   # Swahili
-    "he": "he",    # Hebrew
-    "fa": "fa",    # Farsi/Persian
-    "ur": "ur",    # Urdu
-    "af": "af",    # Afrikaans
-    "sq": "sq",    # Albanian
-    "ka": "ka",    # Georgian
-    "mk": "mk",    # Macedonian
-    "sk": "sk",    # Slovak
-    "sl": "sl",    # Slovenian
-    "lt": "lt",    # Lithuanian
-    "lv": "lv",    # Latvian
-    "et": "et",    # Estonian
-}
+# Number of chunks translated in a single forward pass
+BATCH_SIZE = 16
+
+# ---------------------------------------------------------------------------
+# Compute device
+# ---------------------------------------------------------------------------
+if torch.cuda.is_available():
+    _DEVICE = torch.device("cuda")
+elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    _DEVICE = torch.device("mps")
+else:
+    _DEVICE = torch.device("cpu")
+
+# ---------------------------------------------------------------------------
+# Model map: langdetect code → HuggingFace model ID
+# ---------------------------------------------------------------------------
+# Base list: all codes that have a standard Helsinki-NLP/opus-mt-{lang}-en model
+_BASE_LANGS = [
+    'af', 'am', 'ar', 'az', 'be', 'bg', 'bi', 'bn', 'ca', 'cs', 'cy', 'da',
+    'de', 'ee', 'eo', 'es', 'et', 'eu', 'fi', 'fj', 'fr', 'ga', 'gl',
+    'gv', 'ha', 'he', 'hi', 'ho', 'ht', 'hu', 'hy', 'id', 'ig', 'is',
+    'it', 'ja', 'ka', 'kg', 'kj', 'kl', 'ko', 'lg', 'ln', 'lu', 'lv',
+    'mg', 'mh', 'mk', 'ml', 'mr', 'ms', 'mt', 'ng', 'nl', 'no', 'ny', 'om',
+    'pa', 'pl', 'rn', 'ru', 'rw', 'sg', 'sk', 'sl', 'sm',
+    'sn', 'sq', 'ss', 'st', 'sv', 'sw', 'th', 'ti', 'tl', 'tn', 'to', 'tr',
+    'ts', 'tw', 'ty', 'uk', 'ur', 've', 'vi', 'wa', 'xh', 'yo', 'zh',
+]
+
+TRANSLATION_MODELS: dict = {lang: f'Helsinki-NLP/opus-mt-{lang}-en' for lang in _BASE_LANGS}
+
+# Patch known broken / renamed model paths on HuggingFace Hub
+TRANSLATION_MODELS.update({
+    'hr': 'Helsinki-NLP/opus-mt-tc-big-sh-en',  # Croatian → Serbo-Croatian big model
+    'sh': 'Helsinki-NLP/opus-mt-tc-big-sh-en',  # Serbo-Croatian
+    'el': 'Helsinki-NLP/opus-mt-grk-en',         # Greek → Greek-family model
+    'lt': 'Helsinki-NLP/opus-mt-tc-big-lt-en',  # Lithuanian → big model
+    'pt': 'Helsinki-NLP/opus-mt-ROMANCE-en',     # Portuguese → Romance-family
+    'ro': 'Helsinki-NLP/opus-mt-ROMANCE-en',     # Romanian → Romance-family
+    'ne': 'Helsinki-NLP/opus-mt-ine-en',         # Nepali → Indo-European family
+})
 
 
 class ArticleTranslator:
-    """Translates article text to English using MarianMT.
+    """Translates article text to English using Helsinki-NLP MarianMT models.
+
+    Uses direct AutoTokenizer + AutoModelForSeq2SeqLM for batched inference,
+    which is more efficient than the HuggingFace `pipeline` wrapper when
+    processing multi-chunk articles.
 
     Usage:
         translator = ArticleTranslator()
-        result = translator.translate(text)
-        # result = {"translated_text": "...", "language_detected": "es", "was_translated": True}
+        result = translator.translate(text, title)
+        # result["translated_text"], result["language_detected"], result["was_translated"]
     """
 
     def __init__(self):
-        # Cache: language_code -> transformers pipeline
-        self._pipelines: dict = {}
-        # Load spaCy English model for sentence segmentation
-        try:
-            self._nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            logger.warning("spaCy en_core_web_sm not found. Falling back to simple sentence splitting.")
-            self._nlp = None
+        # lang_code -> (AutoTokenizer, AutoModelForSeq2SeqLM)
+        self._cache: dict = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -97,10 +92,10 @@ class ArticleTranslator:
         """Translate article body (and optionally title) to English.
 
         Returns dict with keys:
-            translated_text  (str) — English text (or original if already English)
-            translated_title (str) — English title
-            language_detected (str) — ISO-639-1 code detected by langdetect
-            was_translated   (bool) — whether translation was applied
+            translated_text   (str)  — English text (original if already English)
+            translated_title  (str)  — English title
+            language_detected (str)  — ISO-639-1 code from langdetect
+            was_translated    (bool) — whether translation was applied
         """
         if not text or not text.strip():
             return {
@@ -112,7 +107,6 @@ class ArticleTranslator:
 
         lang = self._detect_language(text)
 
-        # If English or undetectable, return as-is
         if lang in ("en", "unknown"):
             return {
                 "translated_text": text,
@@ -121,10 +115,8 @@ class ArticleTranslator:
                 "was_translated": False,
             }
 
-        # Check if we have a MarianMT model for this language
-        marian_code = SUPPORTED_LANGUAGES.get(lang)
-        if marian_code is None:
-            logger.info(f"No MarianMT model for detected language '{lang}'. Returning original text.")
+        if lang not in TRANSLATION_MODELS:
+            logger.info(f"No MarianMT model for detected language '{lang}'. Returning original.")
             return {
                 "translated_text": text,
                 "translated_title": title,
@@ -132,13 +124,8 @@ class ArticleTranslator:
                 "was_translated": False,
             }
 
-        # Translate body
-        translated_text = self._translate_text(text, marian_code)
-
-        # Translate title (if provided and non-empty)
-        translated_title = title
-        if title and title.strip():
-            translated_title = self._translate_text(title, marian_code)
+        translated_text = self._translate_text(text, lang)
+        translated_title = self._translate_text(title, lang) if title and title.strip() else title
 
         return {
             "translated_text": translated_text,
@@ -152,87 +139,95 @@ class ArticleTranslator:
     # ------------------------------------------------------------------
 
     def _detect_language(self, text: str) -> str:
-        """Detect language using langdetect. Returns ISO-639-1 code or 'unknown'."""
+        """Return ISO-639-1 code detected by langdetect, or 'unknown'."""
         try:
-            # Use first 2000 chars for speed
-            sample = text[:2000]
-            lang = detect(sample)
-            logger.debug(f"Detected language: {lang}")
+            lang = detect(text[:2000])
+            # Normalise Chinese variants
+            if lang.startswith('zh'):
+                return 'zh'
             return lang
         except LangDetectException:
             logger.warning("Language detection failed; treating as unknown.")
             return "unknown"
 
-    def _get_pipeline(self, marian_code: str):
-        """Get or create a cached MarianMT pipeline for a given language."""
-        if marian_code not in self._pipelines:
-            model_name = f"Helsinki-NLP/opus-mt-{marian_code}-en"
-            logger.info(f"Loading translation model: {model_name}")
+    def _get_model(self, lang: str) -> Tuple[Optional[object], Optional[object]]:
+        """Return cached (tokenizer, model) for the given language code."""
+        if lang not in self._cache:
+            model_id = TRANSLATION_MODELS[lang]
+            logger.info(f"Loading translation model: {model_id} (device={_DEVICE})")
             try:
-                self._pipelines[marian_code] = hf_pipeline(
-                    "translation",
-                    model=model_name,
-                    device=-1,  # CPU; set to 0 for GPU
-                )
+                tokenizer = AutoTokenizer.from_pretrained(model_id)
+                model = AutoModelForSeq2SeqLM.from_pretrained(model_id).to(_DEVICE)
+                model.eval()
+                self._cache[lang] = (tokenizer, model)
             except Exception as e:
-                logger.error(f"Failed to load model {model_name}: {e}")
-                return None
-        return self._pipelines[marian_code]
+                logger.error(f"Failed to load {model_id}: {e}")
+                return None, None
+        return self._cache[lang]
+
+    def _split_sentences(self, text: str) -> list:
+        """Split text into sentences using punctuation boundaries."""
+        text = text.replace('\n', ' ').strip()
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?]) +', text) if s.strip()]
+        return sentences if sentences else [text]
 
     def _chunk_text(self, text: str) -> list:
-        """Split text into sentence-aware chunks of ≤ MAX_CHUNK_CHARS."""
-        if self._nlp is not None:
-            doc = self._nlp(text)
-            sentences = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
-        else:
-            # Fallback: split on period + space
-            import re as _re
-            sentences = [s.strip() for s in _re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-
+        """Group sentences into chunks of at most MAX_CHUNK_CHARS characters."""
+        sentences = self._split_sentences(text)
         chunks = []
-        current_chunk = ""
+        current = ""
 
-        for sentence in sentences:
-            # If a single sentence exceeds max, hard-split it
-            if len(sentence) > MAX_CHUNK_CHARS:
-                if current_chunk:
-                    chunks.append(current_chunk)
-                    current_chunk = ""
-                # Split long sentence by MAX_CHUNK_CHARS
-                for i in range(0, len(sentence), MAX_CHUNK_CHARS):
-                    chunks.append(sentence[i : i + MAX_CHUNK_CHARS])
+        for sent in sentences:
+            if len(sent) > MAX_CHUNK_CHARS:
+                # Flush current buffer, then hard-split the oversized sentence
+                if current:
+                    chunks.append(current)
+                    current = ""
+                for i in range(0, len(sent), MAX_CHUNK_CHARS):
+                    chunks.append(sent[i:i + MAX_CHUNK_CHARS])
                 continue
 
-            if len(current_chunk) + len(sentence) + 1 > MAX_CHUNK_CHARS:
-                if current_chunk:
-                    chunks.append(current_chunk)
-                current_chunk = sentence
+            if len(current) + len(sent) + 1 > MAX_CHUNK_CHARS:
+                if current:
+                    chunks.append(current)
+                current = sent
             else:
-                current_chunk = f"{current_chunk} {sentence}".strip()
+                current = f"{current} {sent}".strip()
 
-        if current_chunk:
-            chunks.append(current_chunk)
+        if current:
+            chunks.append(current)
 
         return chunks if chunks else [text]
 
-    def _translate_text(self, text: str, marian_code: str) -> str:
-        """Translate text using the MarianMT pipeline with chunking."""
-        translator = self._get_pipeline(marian_code)
-        if translator is None:
-            return text  # Fallback: return original
+    def _translate_text(self, text: str, lang: str) -> str:
+        """Translate text by batching its sentence chunks through MarianMT."""
+        tokenizer, model = self._get_model(lang)
+        if tokenizer is None:
+            return text  # model unavailable — return original
 
         chunks = self._chunk_text(text)
-        translated_chunks = []
+        translated: list = []
 
-        for chunk in chunks:
+        for i in range(0, len(chunks), BATCH_SIZE):
+            batch = chunks[i:i + BATCH_SIZE]
             try:
-                result = translator(chunk, max_length=512)
-                translated_chunks.append(result[0]["translation_text"])
+                inputs = tokenizer(
+                    batch,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                ).to(_DEVICE)
+                with torch.no_grad():
+                    output_tokens = model.generate(**inputs, max_length=512)
+                translated.extend(
+                    tokenizer.batch_decode(output_tokens, skip_special_tokens=True)
+                )
             except Exception as e:
-                logger.warning(f"Translation failed for chunk ({len(chunk)} chars): {e}")
-                translated_chunks.append(chunk)  # Keep original on failure
+                logger.warning(f"Batch translation failed ({len(batch)} chunks): {e}")
+                translated.extend(batch)  # fall back to original chunks
 
-        return " ".join(translated_chunks)
+        return " ".join(translated)
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +237,7 @@ _translator: Optional[ArticleTranslator] = None
 
 
 def get_translator() -> ArticleTranslator:
-    """Get or create the global ArticleTranslator instance."""
+    """Return (or lazily create) the global ArticleTranslator instance."""
     global _translator
     if _translator is None:
         _translator = ArticleTranslator()
